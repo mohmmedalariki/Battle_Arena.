@@ -8,7 +8,8 @@ module.exports = merge(base, {
   entry: "./client/src/index.js",
     output: {
       path: path.resolve(__dirname, "../client/public/"),
-      filename: "bundle.min.js"
+      filename: "[name].[contenthash].js"
+
   },
   devtool: false,
   performance: {

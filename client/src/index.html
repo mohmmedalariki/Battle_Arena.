@@ -3,22 +3,146 @@
   <head>
     <meta charset="utf-8">
     <title>Experimental game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/colyseus.js/dist/colyseus.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
+
+
     <style>
 
+    
       body{
         margin: 0;
         overflow: hidden;
         background-color: #121212;
+        height: 100vh;
+        display: flex;
+         justify-content: center;
+      align-items: center;
       }
+
+      #overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none; 
+  z-index: 10;
+}
 
       canvas {
         margin: 0;
       }
 
-    </style>
+    
+  #loginForm {
+  background-color: #1a1a1a;
+  padding: 30px;
+  border: 2px solid #99bb99;
+  border-radius: 10px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 1000;
+  font-family: 'Silkscreen', sans-serif;
+}
+
+
+#loginForm h2 {
+  color: #cceedd;
+  font-size: 18px;
+  text-align: center;
+  margin: 0 0 10px;
+}
+
+
+#loginForm input {
+  padding: 10px;
+  background-color: #0f0f0f;
+  color: #cceedd;
+  border: 1px solid #99bb99;
+  border-radius: 4px;
+  font-size: 16px;
+  outline: none;
+}
+
+#loginForm input:focus {
+  border-color: #cceedd;
+}
+
+
+#loginForm button {
+  padding: 10px;
+  background-color: #99bb99;
+  color: #0f0f0f;
+  border: none;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  border-radius: 20px; 
+  transition: background 0.2s ease;
+  font-family: inherit;
+  width: 70%;
+  text-align: center;
+}
+
+#loginForm button:hover {
+  background-color: #cceedd;
+}
+
+#loginForm button:last-child {
+  background-color: transparent;
+  color: #cceedd;
+  border: 1px solid #99bb99;
+}
+
+#loginForm button:last-child:hover {
+  background-color: #99bb99;
+  color: #0f0f0f;
+}
+
+#overlay {
+  position: absolute;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: auto; 
+  z-index: 10;
+}
+
+
+      </style>
   </head>
   <body>
+
     <section id="game-container"></section>
+
+    <div id="overlay">
+
+
+    <div id="loginForm">
+    <h2>Login</h2>
+    <button id="googleLoginBtn">Login with Google</button>
+    <button class="guestBtn" type="button"> Login as guest </button>
+    </div>
+     </div>
     <!--<script src="bundle.min.js"></script>-->
-  </body>
+
+</body>
+
+
+
+
+    
 </html>
+

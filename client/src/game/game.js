@@ -41,7 +41,11 @@ export default class Game extends Phaser.Scene {
         this.backgroundMusic = null;
 
         this.closingMessage = "You have been disconnected from the server";
-
+         //Player Health Bar
+        this.healthBarBackground = null;
+        this.healthBar = null;
+        this.currentHealth = 100;
+        this.maxHealth = 100;
     }
 
     preload() {
@@ -91,6 +95,22 @@ export default class Game extends Phaser.Scene {
         }).setScrollFactor(0).setDepth(10);
 
         this.cursors = this.input.keyboard.createCursorKeys();
+       // Create Health Bar Background (50% visible)
+this.healthBarBackground = this.add.graphics();
+this.healthBarBackground.fillStyle(0x000000, 0.5); // 50% transparent black
+this.healthBarBackground.fillRect(20, 550, 204, 24);
+this.healthBarBackground.setScrollFactor(0).setDepth(10);
+
+// Create Health Bar
+this.healthBar = this.add.graphics();
+this.updateHealthBar = () => {
+    const healthRatio = Phaser.Math.Clamp(this.currentHealth / this.maxHealth, 0, 1);
+    this.healthBar.clear();
+    this.healthBar.fillStyle(0xff0000, 0.8); // 80% visible red
+    this.healthBar.fillRect(22, 552, 200 * healthRatio, 20);
+    this.healthBar.setScrollFactor(0).setDepth(11);
+};
+this.updateHealthBar();
     }
 
     connect() {
@@ -200,14 +220,18 @@ export default class Game extends Phaser.Scene {
                 if (message.punisher_id == self.room.sessionId) {
                     self.score += 1;
                     self.scoreText.setText("numbers of kills : " + self.score);
-                } else if (message.punished_id == self.room.sessionId) {
-                    self.closingMessage = "You have been killed.\nTo restart, reload the page";
-                    this.player.sprite.destroy();
-                    delete this.player;
-                    alert(self.closingMessage);
-                    client.close();
+                }else if (message.punished_id == self.room.sessionId) {
+    self.currentHealth = Math.max(0, self.currentHealth - 10); // Reduce health by 10
+    self.updateHealthBar();
                     //maybe implement the possibility to the see the game after being killed
                 }
+                 if (self.currentHealth <= 0) {
+        self.closingMessage = "You have been killed.\nTo restart, reload the page";
+        this.player.sprite.destroy();
+        delete this.player;
+        alert(self.closingMessage);
+        client.close();
+    }
             } else {
                 console.log(`${message.event} is an unkown event`);
             }
@@ -295,7 +319,15 @@ export default class Game extends Phaser.Scene {
         }
 
     }
+  //Update the Health Bar
+    updateHealthBar() {
+        const healthRatio = Phaser.Math.Clamp(this.currentHealth / this.maxHealth, 0, 1);
 
+        this.healthBar.clear();
+        this.healthBar.fillStyle(0xff0000, 1); // red
+        this.healthBar.fillRect(22, this.scale.height - 48, 200 * healthRatio, 20);
+        this.healthBar.setScrollFactor(0).setDepth(11);
+    }
     addPlayer(data) {
         let id = data.id;
         let sprite = this.physics.add.sprite(data.x, data.y, "player").setSize(60, 80);
