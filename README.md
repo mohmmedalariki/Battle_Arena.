@@ -59,3 +59,10 @@ Three brightful minds namely:
  [Arnol Fokam](https://github.com/ArnolFokam/) - JS Ninja and cold blooded Game architect.  
  [Teddy Baha](https://github.com/Wil2129) - Firebase Samurai and Ace critical thinker.  
  [Alex Jordan](https://github.com/alexjordan05) - Graphics Sensei and Gamer in the Soul.  
+
+## Things added during internship:
+    * Added login overlay.
+    * Implemented Firebase + Firestore authentication and configs.
+    * Implemented user registration with Google email and a login as guest option.
+    * Generated username for players who logged in with Google.
+    * Information about the player data can be found in the Firestore https://console.firebase.google.com/u/0/project/arena-b3a54/overview.
