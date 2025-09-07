@@ -127,13 +127,14 @@ export default class Game extends Phaser.Scene {
                 canShoot: false,        // Changed to false - no shooting
                 canThrowGrenade: true,   // New property
                 name: 'Grenade Launcher',
-                fireRate: 2000,         // 2 second reload time
+                fireRate: 2500,         // 2.5 second reload time
                 bulletCount: 1,
                 spread: 0,
-                damage: 100,            // High explosive damage
+                damage: 80,             // Reduced from 100 to 80 for better balance
                 bulletSpeed: 300,
-                range: 600,             // Reasonable grenade throw range
-                explosive: true
+                range: 450,             // Reduced from 600 to 450 for more logical range
+                explosive: true,
+                explosionRadius: 120    // Add explosion radius property
             },
             'no_grinad': {
                 speed: 320, // New configuration for no_grinad sprite
@@ -236,6 +237,7 @@ export default class Game extends Phaser.Scene {
         this.players = {};
         this.player = null;
         this.bullets = {};
+        this.grenades = {};
         this.map;
         this.bulletSound = null;
         this.backgroundMusic = null;
@@ -637,14 +639,24 @@ export default class Game extends Phaser.Scene {
 
     connect() {
         var self = this;
-        this.room = client.join("outdoor", {});
+        // Send team information when joining the room
+        console.log(`🎮 Connecting to server with team: ${this.selectedTeam}`);
+        this.room = client.join("outdoor", {
+            team: this.selectedTeam
+        });
 
 
-        this.room.onJoin.add(() => {
+            this.room.onJoin.add(() => {
 
             self.roomJoined = true;
 
             this.room.onStateChange.addOnce((state) => {
+                console.log('🎮 Initial state received:', {
+                    players: Object.keys(state.players).length,
+                    bullets: Object.keys(state.bullets).length,
+                    grenades: Object.keys(state.grenades || {}).length
+                });
+                
                 // Loop over all the player data received
                 for (let id in state.players) {
                     // If the player hasn't been created yet
@@ -663,24 +675,75 @@ export default class Game extends Phaser.Scene {
                     }
 
                 }
-            });
-
-            this.room.state.players.onAdd = (player, sessionId) => {
-                //to prevent the player from recieving a message when he is the new player added
+            });            this.room.state.players.onAdd = (player, sessionId) => {
+                console.log(`🎮 State: Player ${sessionId} added`);
+                console.log(`🎨 Player data:`, {
+                    team: player.team,
+                    currentSprite: player.currentSprite,
+                    x: player.x,
+                    y: player.y
+                });
+                
+                // Create the visual sprite for this player if it doesn't exist
+                if (!self.players[sessionId]) {
+                    // Get spawn position (use a default if no specific position)
+                    let spawnX = player.x || 400;
+                    let spawnY = player.y || 300;
+                    
+                    // Determine the correct sprite based on player's team
+                    let spriteKey;
+                    if (player.team === 'blue') {
+                        spriteKey = player.currentSprite || 'blue_empty_hands';
+                        console.log(`🔵 Blue team player: ${spriteKey}`);
+                    } else {
+                        spriteKey = player.currentSprite || 'empty_hands';
+                        console.log(`🟠 Orange team player: ${spriteKey}`);
+                    }
+                    
+                    console.log(`🎨 Creating player ${sessionId} with sprite: ${spriteKey}`);
+                    
+                    // Create the visual sprite
+                    let sprite = self.physics.add.sprite(spawnX, spawnY, spriteKey).setSize(120, 165);
+                    
+                    // Store player reference
+                    self.players[sessionId] = {};
+                    self.players[sessionId].sprite = sprite;
+                    self.players[sessionId].team = player.team;
+                    
+                    // If this is the current player, set up camera and controls
+                    if (sessionId == self.room.sessionId) {
+                        self.player = self.players[sessionId];
+                        self.player.sprite.setCollideWorldBounds(true);
+                        self.cameras.main.startFollow(self.player.sprite);
+                        self.cameras.main.setLerp(0.1, 0.1);
+                    }
+                }
+                
+                // Set up change handler for this player
                 if (sessionId != this.room.sessionId) {
-                    // If you want to track changes on a child object inside a map, this is a common pattern:
                     player.onChange = function (changes) {
                         changes.forEach(change => {
                             if (change.field == "rotation") {
-                                self.players[sessionId].sprite.target_rotation = change.value;
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.target_rotation = change.value;
+                                }
                             } else if (change.field == "x") {
-                                self.players[sessionId].sprite.target_x = change.value;
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.target_x = change.value;
+                                }
                             } else if (change.field == "y") {
-                                self.players[sessionId].sprite.target_y = change.value;
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.target_y = change.value;
+                                }
+                            } else if (change.field == "currentSprite") {
+                                // Handle sprite changes from server state
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.setTexture(change.value);
+                                    console.log(`🎨 State change: Player ${sessionId} sprite → ${change.value}`);
+                                }
                             }
                         });
                     };
-
                 }
             }
 
@@ -704,12 +767,46 @@ export default class Game extends Phaser.Scene {
                 self.removeBullet(bullet.index);
             }
 
+            this.room.state.grenades.onAdd = (grenade, sessionId) => {
+                console.log(`💣 Grenade state received:`, {
+                    index: grenade.index,
+                    startX: grenade.startX,
+                    startY: grenade.startY,
+                    targetX: grenade.targetX,
+                    targetY: grenade.targetY,
+                    startTime: grenade.startTime
+                });
+                self.createGrenadeFromServer(grenade);
+            }
+
+            this.room.state.grenades.onRemove = function (grenade, sessionId) {
+                console.log(`💥 Grenade ${grenade.index} exploded at (${grenade.targetX}, ${grenade.targetY})`);
+                // Create explosion effect at target location
+                if (self.grenades[grenade.index]) {
+                    self.createExplosionEffect(grenade.targetX, grenade.targetY);
+                    // Clean up grenade sprite
+                    if (self.grenades[grenade.index].sprite) {
+                        self.grenades[grenade.index].sprite.destroy();
+                    }
+                    delete self.grenades[grenade.index];
+                } else {
+                    // Even if we don't have the grenade sprite, still show explosion
+                    self.createExplosionEffect(grenade.targetX, grenade.targetY);
+                }
+            }
+
 
 
             this.room.state.players.onRemove = function (player, sessionId) {
-                //if the player removed (maybe killed) is not this player
+                console.log(`🗑️  Player ${sessionId} removed from server state`);
+                
+                // Remove the player visually for everyone (including if it's the current player who died)
                 if (sessionId !== self.room.sessionId) {
+                    // Remove other players
                     self.removePlayer(sessionId);
+                } else {
+                    // Current player died - handled by death message system
+                    console.log(`☠️  Current player removed from server`);
                 }
             }
         });
@@ -725,38 +822,44 @@ export default class Game extends Phaser.Scene {
                     action: "initial_position",
                     data: position
                 });
-                self.addPlayer({
-                    id: this.room.sessionId,
-                    x: spawnPoint.x,
-                    y: spawnPoint.y
-                });
+                // Player creation is now handled by state system, not messages
+                // self.addPlayer({
+                //     id: this.room.sessionId,
+                //     x: spawnPoint.x,
+                //     y: spawnPoint.y
+                // });
             } else if (message.event == "new_player") {
-                let spawnPoint = this.map.findObject("player", obj => obj.name === `player${message.position}`);
-                let p = self.addPlayer({
-                    x: spawnPoint.x,
-                    y: spawnPoint.y,
-                    id: message.id,
-                    rotation: message.rotation || 0
-                });
+                // Player creation is now handled by state system, not messages
+                // let spawnPoint = this.map.findObject("player", obj => obj.name === `player${message.position}`);
+                // let p = self.addPlayer({
+                //     x: spawnPoint.x,
+                //     y: spawnPoint.y,
+                //     id: message.id,
+                //     team: message.team || 'orange',
+                //     rotation: message.rotation || 0
+                // });
+                console.log('📨 new_player message received (handled by state system)');
             } else if (message.event == "hit") {
-    if (message.punished_id == self.room.sessionId) {
-        // Use the new damage system instead of directly modifying health
-        self.takeDamage(10); // Reduce health by 10 using the proper damage system
-        
-        // Check if player died from this hit
-        if (self.currentHealth <= 0) {
-            // Optional: Implement spectator mode instead of immediate disconnection
-            self.handleDeath();
-        }
-    }
-
-                 if (self.currentHealth <= 0) {
-        self.closingMessage = "You have been killed.\nTo restart, reload the page";
-        this.player.sprite.destroy();
-        delete this.player;
-        alert(self.closingMessage);
-        client.close();
-    }
+                if (message.punished_id == self.room.sessionId) {
+                    // Get damage amount from server (or use default)
+                    let damage = message.damage || 10;
+                    
+                    // Use the new damage system with proper damage amount
+                    self.takeDamage(damage);
+                    
+                    // Check if player died from this hit
+                    if (self.currentHealth <= 0) {
+                        // Let handleDeath() manage the death process properly
+                        self.handleDeath();
+                    }
+                    
+                    // Show appropriate hit message
+                    let weaponType = message.weaponType || 'bullet';
+                    console.log(`💥 Hit by ${weaponType}! Damage: ${damage}, Health: ${self.currentHealth}`);
+                }
+            } else if (message.event == "player_sprite_changed") {
+                // Sprite changes are now handled by state system
+                console.log(`📨 Sprite change message (handled by state system): ${message.sprite}`);
             } else {
                 console.log(`${message.event} is an unkown event`);
             }
@@ -980,14 +1083,31 @@ takeDamage(amount) {
 }
 
 handleDeath() {
+    console.log(`☠️  Player death - notifying server and cleaning up`);
+    
     this.closingMessage = "You have been killed.\nTo restart, reload the page";
+    
+    // Notify server that this player has died
+    if (this.roomJoined && this.room) {
+        this.room.send({
+            action: "player_died",
+            data: {
+                playerId: this.room.sessionId
+            }
+        });
+    }
+    
     if (this.player && this.player.sprite) {
         this.player.sprite.destroy();
     }
     delete this.player;
     this.stopLowHealthEffects();
-    alert(this.closingMessage);
-    client.close();
+    
+    // Add a small delay before closing to allow server state synchronization
+    setTimeout(() => {
+        alert(this.closingMessage);
+        client.close();
+    }, 1000); // 1 second delay to allow other players to see the death
 }
 
 animateLowHealthWarning() {
@@ -1083,11 +1203,33 @@ stopLowHealthEffects() {
 
     addPlayer(data) {
         let id = data.id;
-        // Use the current sprite key for new players, or default to empty_hands
+        let playerTeam = data.team || 'orange';
+        
+        // Use the current sprite key for own player, or default to empty_hands for others
         let baseSpriteKey = (id == this.room.sessionId) ? this.currentSpriteKey : 'empty_hands';
         
-        // Get team-specific sprite key
-        let spriteKey = this.getTeamSpriteKey(baseSpriteKey);
+        // For other players, we need to create a temporary context to get their team sprite
+        let spriteKey;
+        if (id == this.room.sessionId) {
+            // Use our own team sprite system
+            spriteKey = this.getTeamSpriteKey(baseSpriteKey);
+        } else {
+            // For other players, manually determine team-specific sprite
+            if (playerTeam === 'blue') {
+                switch(baseSpriteKey) {
+                    case 'empty_hands': spriteKey = 'blue_empty_hands'; break;
+                    case 'klakin': spriteKey = 'blue_klakin'; break;
+                    case 'shootgun': spriteKey = 'blue_shootgun'; break;
+                    case 'grinad': spriteKey = 'blue_grinad'; break;
+                    case 'no_grinad': spriteKey = 'blue_empty_hands'; break;
+                    default: spriteKey = 'blue_empty_hands';
+                }
+            } else {
+                spriteKey = baseSpriteKey;
+            }
+        }
+        
+        console.log(`🎮 Adding player ${id} with team: ${playerTeam}, sprite: ${spriteKey}`);
         
         let sprite = this.physics.add.sprite(data.x, data.y, spriteKey).setSize(120, 165);
 
@@ -1116,8 +1258,17 @@ stopLowHealthEffects() {
     }
 
     removePlayer(id) {
-        this.players[id].sprite.destroy();
-        delete this.players[id];
+        console.log(`🗑️  Attempting to remove player: ${id}`);
+        console.log(`🗑️  Player exists:`, !!this.players[id]);
+        console.log(`🗑️  Sprite exists:`, !!(this.players[id] && this.players[id].sprite));
+        
+        if (this.players[id] && this.players[id].sprite) {
+            this.players[id].sprite.destroy();
+            delete this.players[id];
+            console.log(`✅ Successfully removed player: ${id}`);
+        } else {
+            console.log(`⚠️  Player ${id} was already removed or doesn't exist`);
+        }
     }
 
     rotatePlayer(pointer = this.input.activePointer) {
@@ -1129,6 +1280,64 @@ stopLowHealthEffects() {
     removeBullet(index) {
         this.bullets[index].destroy();
         delete this.bullets[index];
+    }
+
+    // Create grenade projectile from server state
+    createGrenadeFromServer(grenadeData) {
+        console.log(`🎯 Creating grenade visual for index ${grenadeData.index}`);
+        
+        // Create grenade sprite
+        const grenade = this.add.image(grenadeData.startX, grenadeData.startY, 'the_grinad');
+        grenade.setScale(0.8);
+        grenade.setDepth(15);
+        
+        // Store grenade reference
+        this.grenades[grenadeData.index] = {
+            sprite: grenade,
+            targetX: grenadeData.targetX,
+            targetY: grenadeData.targetY
+        };
+        
+        console.log(`🚀 Grenade ${grenadeData.index} sprite created at (${grenadeData.startX}, ${grenadeData.startY})`);
+        
+        // Calculate flight time
+        const distance = Phaser.Math.Distance.Between(
+            grenadeData.startX, grenadeData.startY,
+            grenadeData.targetX, grenadeData.targetY
+        );
+        const flightTime = Math.min(1000 + (distance / 2), 2000);
+        
+        console.log(`⏱️ Grenade flight time: ${flightTime}ms, distance: ${Math.round(distance)}px`);
+
+        // Animate grenade movement
+        this.tweens.add({
+            targets: grenade,
+            x: grenadeData.targetX,
+            y: grenadeData.targetY,
+            duration: flightTime,
+            ease: "Quad.easeOut",
+            onComplete: () => {
+                console.log(`🎯 Grenade ${grenadeData.index} reached target`);
+            }
+        });
+
+        // Add rotation animation
+        this.tweens.add({
+            targets: grenade,
+            rotation: Math.PI * 4,
+            duration: flightTime,
+            ease: "Linear"
+        });
+
+        // Add arc effect
+        this.tweens.add({
+            targets: grenade,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: flightTime / 2,
+            yoyo: true,
+            ease: "Sine.easeInOut"
+        });
     }
 
     changeSpriteTexture(spriteKey) {
@@ -1161,12 +1370,12 @@ stopLowHealthEffects() {
             // Update gun bar to reflect current weapon
             this.updateGunBarImage();
             
-            // Optional: Send sprite change to server
-            if (this.roomJoined) {
+            // Send sprite change to server for multiplayer sync
+            if (this.roomJoined && this.room) {
                 this.room.send({
-                    action: "change_sprite",
+                    action: "sprite_change",
                     data: {
-                        spriteKey: spriteKey
+                        sprite: teamSpriteKey
                     }
                 });
             }
@@ -1296,10 +1505,16 @@ throwGrenade(pointer) {
     // Start reload sequence
     this.startGrenadeReload();
 
-    // Create and animate the grenade
-    this.createGrenadeProjectile(targetX, targetY);
+    console.log(`🎯 Sending grenade throw command:`, {
+        startX: this.player.sprite.x,
+        startY: this.player.sprite.y,
+        targetX: targetX,
+        targetY: targetY,
+        distance: Math.round(distance),
+        maxRange: maxRange
+    });
 
-    // Send grenade data to server
+    // Send grenade data to server (server will handle synchronization)
     this.room.send({
         action: "throw_grenade",
         data: {
@@ -1313,60 +1528,11 @@ throwGrenade(pointer) {
     });
 }
 
-// Create and animate the grenade projectile
-createGrenadeProjectile(targetX, targetY) {
-    // Create grenade sprite
-    const grenade = this.add.image(this.player.sprite.x, this.player.sprite.y, 'the_grinad');
-    grenade.setScale(0.8); // Make it smaller
-    grenade.setDepth(15); // Above other objects
-    
-    // Calculate flight time based on distance
-    const distance = Phaser.Math.Distance.Between(
-        this.player.sprite.x, 
-        this.player.sprite.y, 
-        targetX, 
-        targetY
-    );
-    const flightTime = Math.min(1000 + (distance / 2), 2000); // 1-2 seconds flight time
-
-    // Animate grenade movement with arc
-    this.tweens.add({
-        targets: grenade,
-        x: targetX,
-        y: targetY,
-        duration: flightTime,
-        ease: "Quad.easeOut",
-        onComplete: () => {
-            // Explosion effect at target location
-            this.createExplosionEffect(targetX, targetY);
-            grenade.destroy();
-        }
-    });
-
-    // Add rotation animation
-    this.tweens.add({
-        targets: grenade,
-        rotation: Math.PI * 4, // Spin 2 full rotations
-        duration: flightTime,
-        ease: "Linear"
-    });
-
-    // Add arc effect by animating scale to simulate height
-    this.tweens.add({
-        targets: grenade,
-        scaleX: 1.2,
-        scaleY: 1.2,
-        duration: flightTime / 2,
-        yoyo: true,
-        ease: "Sine.easeInOut"
-    });
-}
-
 // Create explosion effect
 createExplosionEffect(x, y) {
     // Create animated explosion sprite
     const explosion = this.add.sprite(x, y, 'explosion1');
-    explosion.setScale(2); // Make it bigger - adjust size as needed
+    explosion.setScale(3); // Increased from 2 to 3 to better represent damage area
     explosion.setDepth(16);
     
     // Play the explosion animation
@@ -1377,8 +1543,33 @@ createExplosionEffect(x, y) {
         explosion.destroy();
     });
     
-    // Optional: Add screen shake for impact (remove if you don't want it)
-    // this.cameras.main.shake(200, 0.01);
+    // Add a temporary damage radius indicator (red circle)
+    const damageRadius = this.add.graphics();
+    damageRadius.lineStyle(3, 0xff0000, 0.6); // Red border
+    damageRadius.fillStyle(0xff0000, 0.1); // Semi-transparent red fill
+    damageRadius.fillCircle(x, y, 120); // Match server explosion radius
+    damageRadius.strokeCircle(x, y, 120);
+    damageRadius.setDepth(15); // Below explosion, above other objects
+    
+    // Fade out the damage radius indicator
+    this.tweens.add({
+        targets: damageRadius,
+        alpha: 0,
+        duration: 800,
+        ease: "Power2.easeOut",
+        onComplete: () => damageRadius.destroy()
+    });
+    
+    // Optional: Add screen shake for impact (scaled based on distance)
+    if (this.player) {
+        const distanceToPlayer = Phaser.Math.Distance.Between(
+            this.player.sprite.x, this.player.sprite.y, x, y
+        );
+        if (distanceToPlayer < 300) {
+            const shakeIntensity = Math.max(0.005, 0.02 * (300 - distanceToPlayer) / 300);
+            this.cameras.main.shake(200, shakeIntensity);
+        }
+    }
 }
 
 // Start reload sequence
