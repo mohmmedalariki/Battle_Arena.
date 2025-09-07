@@ -6,6 +6,10 @@ import klakinImage from "./../assets/Klakin.png"
 import shootGunImage from "./../assets/ShootGun.png"
 import grinadImage from "./../assets/Grinad.png"
 import noGrinadImage from "./../assets/No_grinad.png"
+import blueEmptyHandsImage from "./../assets/Blue_Empty_hands.png"
+import blueKlakinImage from "./../assets/Blue_Klakin.png"
+import blueShootGunImage from "./../assets/Blue_ShootGun.png"
+import blueGrinadImage from "./../assets/Blue_Grinad.png"
 import theGrinadImage from "./../assets/The_grinad.png"
 import explosion1Image from "./../assets/Explosion1.png"  
 import explosion2Image from "./../assets/Explosion2.png"  
@@ -18,6 +22,10 @@ import healthBar2Image from "./../assets/HealthBar2.png";
 import healthBar3Image from "./../assets/HealthBar3.png";
 import healthBar4Image from "./../assets/HealthBar4.png";
 import healthBar5Image from "./../assets/HealthBar5.png";
+import gunBar1Image from "./../assets/GunBar1.png";
+import gunBar2Image from "./../assets/GunBar2.png";
+import gunBar3Image from "./../assets/GunBar3.png";
+import gunBar4Image from "./../assets/GunBar4.png";
 import outdoor from "./../assets/tilemaps/battle-royale1.json";
 import outdoorImage from "./../assets/tilemaps/battle-royale.png";
 import bulletImage from "./../assets/bullet.png";
@@ -51,8 +59,35 @@ export default class Game extends Phaser.Scene {
             damageFlashDuration: 100
         };
         
+        // Gun bar config constants - positioned in bottom right corner
+        this.GUN_BAR_CONFIG = {
+            width: 260,
+            height: 80,
+            offsetX: 20,  // Distance from right edge
+            offsetY: 20   // Distance from bottom edge
+        };
+        
         // Add current sprite tracker
         this.currentSpriteKey = 'empty_hands';
+
+        // Performance Optimizations
+        this.PERFORMANCE_CONFIG = {
+            NETWORK_SEND_RATE: 60,           // Send updates 60 times per second max
+            INTERPOLATION_RATE: 0.15,        // Smooth interpolation
+            OBJECT_POOL_SIZE: 50,            // Pre-allocate objects
+            POSITION_THRESHOLD: 2,           // Only send if moved more than 2 pixels
+            ROTATION_THRESHOLD: 0.05         // Only send if rotated more than 0.05 radians
+        };
+
+        // Network optimization variables
+        this.lastNetworkSend = 0;
+        this.lastPosition = { x: 0, y: 0, rotation: 0 };
+        this.networkBuffer = [];
+        
+        // Object pools for performance
+        this.bulletPool = [];
+        this.explosionPool = [];
+        this.particlePool = [];
 
         // Enhanced weapon configurations with shooting patterns
         this.weaponConfig = {
@@ -114,6 +149,62 @@ export default class Game extends Phaser.Scene {
         // Add grenade state tracking
         this.isReloading = false;
         this.lastShotTime = 0;
+        
+                // Team Selection Logic - Initialize team-specific sprites
+        this.selectedTeam = (window.gameConfig && window.gameConfig.selectedTeam) || 'orange';
+        console.log(`🎮 Game initialized with team: ${this.selectedTeam}`);
+        console.log('🔍 window.gameConfig:', window.gameConfig);
+        
+        // Team-specific sprite mapping
+        if (this.selectedTeam === 'blue') {
+            console.log('🔵 Loading BLUE team sprites');
+            this.teamSprites = {
+                'empty_hands': 'blue_empty_hands',
+                'klakin': 'blue_klakin',
+                'shootgun': 'blue_shootgun',
+                'grinad': 'blue_grinad',
+                'no_grinad': 'blue_empty_hands' // Use blue empty hands when grenade is loading
+            };
+        } else {
+            console.log('🟠 Loading ORANGE team sprites');
+            // Orange/default team
+            this.teamSprites = {
+                'empty_hands': 'empty_hands',
+                'klakin': 'klakin',
+                'shootgun': 'shootgun',
+                'grinad': 'grinad',
+                'no_grinad': 'no_grinad'
+            };
+        }
+    }
+    
+    setupTeamSprites() {
+        // Define sprite mappings based on team
+        if (this.selectedTeam === 'blue') {
+            this.teamSprites = {
+                'empty_hands': 'blue_empty_hands',
+                'klakin': 'blue_klakin',
+                'shootgun': 'blue_shootgun',
+                'grinad': 'blue_grinad',
+                'no_grinad': 'blue_empty_hands' // Use blue empty hands when grenade is loading
+            };
+        } else {
+            // Orange/default team
+            this.teamSprites = {
+                'empty_hands': 'empty_hands',
+                'klakin': 'klakin',
+                'shootgun': 'shootgun',
+                'grinad': 'grinad',
+                'no_grinad': 'no_grinad'
+            };
+        }
+    }
+    
+    // Helper method to get team-specific sprite key
+    getTeamSpriteKey(baseSpriteKey) {
+        const teamSpriteKey = this.teamSprites[baseSpriteKey] || baseSpriteKey;
+        console.log(`🎨 Sprite mapping: ${baseSpriteKey} → ${teamSpriteKey} (team: ${this.selectedTeam})`);
+        return teamSpriteKey;
     }
 
     init() {
@@ -137,6 +228,7 @@ export default class Game extends Phaser.Scene {
         this.maxShield = 50;
         this.heartbeatSound = null;
         this.currentHealthBarImage = 1; // Track which health bar image to show
+        this.currentGunBarImage = 1; // Track which gun bar image to show
 
         this.room = null;
         this.roomJoined = false;
@@ -155,6 +247,19 @@ export default class Game extends Phaser.Scene {
         this.currentHealth = 100;
         this.maxHealth = 100;
         
+        // Performance monitoring
+        this.fpsText = null;
+        this.performanceStats = {
+            frameCount: 0,
+            lastTime: 0,
+            fps: 60,
+            avgFrameTime: 16.67,
+            memoryUsage: 0
+        };
+        
+        // Initialize object pools
+        this.initializeObjectPools();
+        
         // Add sprite mapping
         this.spriteKeys = {
             1: 'empty_hands',
@@ -170,7 +275,7 @@ export default class Game extends Phaser.Scene {
         this.load.image("tiles", outdoorImage);
         this.load.tilemapTiledJSON("map", outdoor);
         
-        // Load all player sprites
+        // Load all player sprites - Orange team
         this.load.spritesheet('empty_hands', emptyHandsImage, { 
             frameWidth: 120,
             frameHeight: 165
@@ -192,6 +297,24 @@ export default class Game extends Phaser.Scene {
             frameHeight: 165
         });
         
+        // Load all player sprites - Blue team
+        this.load.spritesheet('blue_empty_hands', blueEmptyHandsImage, { 
+            frameWidth: 120,
+            frameHeight: 165
+        });
+        this.load.spritesheet('blue_klakin', blueKlakinImage, { 
+            frameWidth: 120,
+            frameHeight: 165
+        });
+        this.load.spritesheet('blue_shootgun', blueShootGunImage, { 
+            frameWidth: 120,
+            frameHeight: 165
+        });
+        this.load.spritesheet('blue_grinad', blueGrinadImage, { 
+            frameWidth: 120,
+            frameHeight: 165
+        });
+        
         // Load explosion animation frames (fixed names)
         this.load.image('explosion1', explosion1Image);
         this.load.image('explosion2', explosion2Image);
@@ -209,6 +332,12 @@ export default class Game extends Phaser.Scene {
         this.load.image('healthBar3', healthBar3Image);
         this.load.image('healthBar4', healthBar4Image);
         this.load.image('healthBar5', healthBar5Image);
+        
+        // Load gun bar images
+        this.load.image('gunBar1', gunBar1Image);
+        this.load.image('gunBar2', gunBar2Image);
+        this.load.image('gunBar3', gunBar3Image);
+        this.load.image('gunBar4', gunBar4Image);
         
         this.load.image('bullet', bulletImage);
         this.load.image('cursor', cursorImage);
@@ -256,7 +385,45 @@ export default class Game extends Phaser.Scene {
     this.testDamageKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
 
     // =============================
-    // 🎮 Image-based Health Bar System
+    // 🖱️ Mouse Wheel Weapon Switching
+    // =============================
+    
+    // Define weapon order for cycling
+    this.weaponOrder = ['empty_hands', 'shootgun', 'klakin', 'grinad'];
+    this.currentWeaponIndex = 0; // Start with empty hands
+    
+    // Add mouse wheel event listener
+    this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+        if (this.player) {
+            // Determine scroll direction
+            if (deltaY > 0) {
+                // Scroll down - next weapon
+                this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weaponOrder.length;
+            } else if (deltaY < 0) {
+                // Scroll up - previous weapon
+                this.currentWeaponIndex = (this.currentWeaponIndex - 1 + this.weaponOrder.length) % this.weaponOrder.length;
+            }
+            
+            // Switch to the selected weapon
+            const newWeapon = this.weaponOrder[this.currentWeaponIndex];
+            this.changeSpriteTexture(newWeapon);
+            
+            console.log(`🖱️ Mouse wheel weapon switch: ${newWeapon} (index: ${this.currentWeaponIndex})`);
+        }
+    });
+
+    // =============================
+    // 🎯 Performance Monitoring & FPS Counter
+    // =============================
+    this.fpsText = this.add.text(this.cameras.main.width - 120, 10, 'FPS: 60', {
+        font: '16px monospace',
+        fill: '#00ff00',
+        backgroundColor: '#000000',
+        padding: { x: 8, y: 4 }
+    }).setScrollFactor(0).setDepth(1000);
+
+    // =============================
+    // �🎮 Image-based Health Bar System
     // =============================
     
     // Create health bar sprite in top left corner
@@ -280,8 +447,40 @@ export default class Game extends Phaser.Scene {
     // Update health bar display
     this.updateHealthBarImage();
 
-    // Add weapon display text (positioned below health bar)
-   
+    // =============================
+    // 🔫 Gun Bar System (Bottom Right Corner)
+    // =============================
+    
+    // Calculate position for bottom right corner using right-bottom origin
+    const screenWidth = this.cameras.main.width;
+    const screenHeight = this.cameras.main.height;
+    const gunBarX = screenWidth - this.GUN_BAR_CONFIG.offsetX;
+    const gunBarY = screenHeight - this.GUN_BAR_CONFIG.offsetY;
+    
+    // Create gun bar sprite in bottom right corner
+    this.gunBarSprite = this.add.image(gunBarX, gunBarY, 'gunBar1');
+    this.gunBarSprite.setOrigin(1, 1); // Bottom-right origin for easier positioning
+    this.gunBarSprite.setScrollFactor(0); // Fixed position on screen
+    this.gunBarSprite.setDepth(100); // High depth to stay on top
+    
+    // Scale the gun bar to the desired size ONLY ONCE
+    this.gunBarSprite.setDisplaySize(this.GUN_BAR_CONFIG.width, this.GUN_BAR_CONFIG.height);
+    
+    console.log(`Gun bar positioned at: X=${gunBarX}, Y=${gunBarY}, Screen: ${screenWidth}x${screenHeight}`);
+    
+    // Initialize gun bar state
+    this.currentGunBarImage = 1;
+    
+    // Update gun bar display based on current weapon
+    this.updateGunBarImage();
+
+    // Add weapon display text (positioned at bottom of screen)
+    this.weaponText = this.add.text(20, screenHeight - 40, `Weapon: ${this.weaponConfig[this.currentSpriteKey].name}`, {
+        font: "16px monospace",
+        fill: "#FFFFFF",
+        backgroundColor: "#000000",
+        padding: { x: 8, y: 4 }
+    }).setScrollFactor(0).setDepth(100);
 
     // Move the pointer input handling here (remove from update method)
     this.input.on('pointermove', function (pointer) {
@@ -329,6 +528,112 @@ export default class Game extends Phaser.Scene {
     });
 }
 
+    // =============================
+    // 🚀 Performance Optimization Methods
+    // =============================
+
+    initializeObjectPools() {
+        // Pre-allocate bullet objects for performance
+        this.bulletPool = [];
+        for (let i = 0; i < this.PERFORMANCE_CONFIG.OBJECT_POOL_SIZE; i++) {
+            this.bulletPool.push({
+                sprite: null,
+                active: false,
+                startTime: 0,
+                direction: { x: 0, y: 0 },
+                speed: 0,
+                lifespan: 3000
+            });
+        }
+
+        // Pre-allocate explosion objects
+        this.explosionPool = [];
+        for (let i = 0; i < 20; i++) {
+            this.explosionPool.push({
+                sprite: null,
+                active: false
+            });
+        }
+    }
+
+    getBulletFromPool() {
+        for (let bullet of this.bulletPool) {
+            if (!bullet.active) {
+                bullet.active = true;
+                return bullet;
+            }
+        }
+        return null; // Pool exhausted
+    }
+
+    returnBulletToPool(bullet) {
+        if (bullet.sprite) {
+            bullet.sprite.setActive(false).setVisible(false);
+        }
+        bullet.active = false;
+    }
+
+    getExplosionFromPool() {
+        for (let explosion of this.explosionPool) {
+            if (!explosion.active) {
+                explosion.active = true;
+                return explosion;
+            }
+        }
+        return null;
+    }
+
+    returnExplosionToPool(explosion) {
+        if (explosion.sprite) {
+            explosion.sprite.setActive(false).setVisible(false);
+        }
+        explosion.active = false;
+    }
+
+    // Enhanced smooth interpolation with performance optimization
+    smoothLerp(current, target, factor) {
+        return current + (target - current) * factor;
+    }
+
+    // Network throttling - only send if significant change
+    shouldSendNetworkUpdate(newPos, newRot) {
+        const now = Date.now();
+        if (now - this.lastNetworkSend < (1000 / this.PERFORMANCE_CONFIG.NETWORK_SEND_RATE)) {
+            return false;
+        }
+
+        const posChange = Math.abs(newPos.x - this.lastPosition.x) + Math.abs(newPos.y - this.lastPosition.y);
+        const rotChange = Math.abs(newRot - this.lastPosition.rotation);
+
+        return posChange > this.PERFORMANCE_CONFIG.POSITION_THRESHOLD || 
+               rotChange > this.PERFORMANCE_CONFIG.ROTATION_THRESHOLD;
+    }
+
+    // Performance monitoring
+    updatePerformanceStats() {
+        this.performanceStats.frameCount++;
+        const now = Date.now();
+        
+        if (now - this.performanceStats.lastTime >= 1000) {
+            this.performanceStats.fps = this.performanceStats.frameCount;
+            this.performanceStats.frameCount = 0;
+            this.performanceStats.lastTime = now;
+            
+            // Update FPS display
+            let color = '#00ff00'; // Green
+            if (this.performanceStats.fps < 30) color = '#ff0000'; // Red
+            else if (this.performanceStats.fps < 45) color = '#ffff00'; // Yellow
+            
+            this.fpsText.setText(`FPS: ${this.performanceStats.fps}`)
+                       .setColor(color);
+            
+            // Memory usage (if available)
+            if (performance.memory) {
+                const memMB = Math.round(performance.memory.usedJSHeapSize / 1048576);
+                this.fpsText.setText(`FPS: ${this.performanceStats.fps} | MEM: ${memMB}MB`);
+            }
+        }
+    }
 
     connect() {
         var self = this;
@@ -464,16 +769,23 @@ export default class Game extends Phaser.Scene {
     }
 
     update() {
+        // Performance monitoring
+        this.updatePerformanceStats();
+
         // Handle sprite switching
         if (this.player) {
             // Check for sprite change keys
             if (Phaser.Input.Keyboard.JustDown(this.spriteKeys_input.one)) {
+                this.currentWeaponIndex = 0; // Sync with mouse wheel
                 this.changeSpriteTexture('empty_hands');
             } else if (Phaser.Input.Keyboard.JustDown(this.spriteKeys_input.two)) {
-                this.changeSpriteTexture('klakin');
+                this.currentWeaponIndex = 1; // Sync with mouse wheel
+                this.changeSpriteTexture('shootgun');  // Changed: Key 2 now switches to ShootGun
             } else if (Phaser.Input.Keyboard.JustDown(this.spriteKeys_input.three)) {
-                this.changeSpriteTexture('shootgun');
+                this.currentWeaponIndex = 2; // Sync with mouse wheel
+                this.changeSpriteTexture('klakin');    // Changed: Key 3 now switches to Klakin
             } else if (Phaser.Input.Keyboard.JustDown(this.spriteKeys_input.four)) {
+                this.currentWeaponIndex = 3; // Sync with mouse wheel
                 this.changeSpriteTexture('grinad');
             }
 
@@ -484,16 +796,23 @@ export default class Game extends Phaser.Scene {
             }
         }
 
+        // Optimized smooth interpolation for other players
         for (let id in this.players) {
             let p = this.players[id].sprite;
-            p.x += ((p.target_x || p.x) - p.x) * 0.5;
-            p.y += ((p.target_y || p.x) - p.y) * 0.5;
-            // Intepolate angle while avoiding the positive/negative issue 
-            let angle = p.target_rotation || p.rotation;
-            let dir = (angle - p.rotation) / (Math.PI * 2);
-            dir -= Math.round(dir);
-            dir = dir * Math.PI * 2;
-            p.rotation += dir;
+            if (p.target_x !== undefined && p.target_y !== undefined) {
+                // Use enhanced smooth lerp instead of basic interpolation
+                p.x = this.smoothLerp(p.x, p.target_x, this.PERFORMANCE_CONFIG.INTERPOLATION_RATE);
+                p.y = this.smoothLerp(p.y, p.target_y, this.PERFORMANCE_CONFIG.INTERPOLATION_RATE);
+                
+                // Optimized rotation interpolation
+                if (p.target_rotation !== undefined) {
+                    let angleDiff = p.target_rotation - p.rotation;
+                    // Normalize angle difference to [-π, π]
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    p.rotation += angleDiff * this.PERFORMANCE_CONFIG.INTERPOLATION_RATE;
+                }
+            }
         }
 
         if (this.player) {
@@ -521,18 +840,35 @@ export default class Game extends Phaser.Scene {
 
             this.shot = false;
 
+            // Optimized network sending with throttling
             if (this.roomJoined) {
-                this.room.send({
-                    action: "move",
-                    data: {
-                        x: this.player.sprite.x,
-                        y: this.player.sprite.y,
-                        rotation: this.player.sprite.rotation
-                    }
-                });
+                const currentPos = {
+                    x: this.player.sprite.x,
+                    y: this.player.sprite.y
+                };
+                const currentRot = this.player.sprite.rotation;
+
+                // Only send network update if significant change occurred
+                if (this.shouldSendNetworkUpdate(currentPos, currentRot)) {
+                    this.room.send({
+                        action: "move",
+                        data: {
+                            x: currentPos.x,
+                            y: currentPos.y,
+                            rotation: currentRot
+                        }
+                    });
+                    
+                    // Update last sent values and timestamp
+                    this.lastPosition = { 
+                        x: currentPos.x, 
+                        y: currentPos.y, 
+                        rotation: currentRot 
+                    };
+                    this.lastNetworkSend = Date.now();
+                }
             }
         }
-
     }
 
     // Update health bar to use appropriate image based on health percentage
@@ -682,18 +1018,94 @@ stopLowHealthEffects() {
     }
 }
 
+    // =============================
+    // 🔫 Gun Bar System Methods
+    // =============================
+
+    updateGunBarImage() {
+        let targetImageNumber;
+        
+        // Map weapon types to gun bar images
+        switch(this.currentSpriteKey) {
+            case 'empty_hands':
+                targetImageNumber = 1; // GunBar1.png - No weapon
+                break;
+            case 'klakin':
+                targetImageNumber = 3; // GunBar3.png - Kalashnikov (changed from 2)
+                break;
+            case 'shootgun':
+                targetImageNumber = 2; // GunBar2.png - Shotgun (changed from 3)
+                break;
+            case 'grinad':
+                targetImageNumber = 4; // GunBar4.png - Grenade Launcher
+                break;
+            case 'no_grinad':
+                targetImageNumber = 1; // GunBar1.png - Empty launcher (treat as no weapon)
+                break;
+            default:
+                targetImageNumber = 1; // Default to no weapon
+        }
+        
+        // Only update if the image needs to change
+        if (this.currentGunBarImage !== targetImageNumber) {
+            this.currentGunBarImage = targetImageNumber;
+            this.gunBarSprite.setTexture(`gunBar${targetImageNumber}`);
+            
+            // Add a subtle weapon change animation
+            this.animateGunBarChange();
+        }
+    }
+
+    // Animate gun bar when weapon changes
+    animateGunBarChange() {
+        // Calculate the correct position using the same logic as initialization
+        const screenWidth = this.cameras.main.width;
+        const screenHeight = this.cameras.main.height;
+        const correctX = screenWidth - this.GUN_BAR_CONFIG.offsetX;
+        const correctY = screenHeight - this.GUN_BAR_CONFIG.offsetY;
+        
+        // Simple 2-pixel shock animation only
+        this.tweens.add({
+            targets: this.gunBarSprite,
+            x: correctX - 2,
+            y: correctY - 2,
+            duration: 50,
+            yoyo: true,
+            repeat: 1,
+            ease: "Power2",
+            onComplete: () => {
+                // Ensure gun bar returns to exact correct position
+                this.gunBarSprite.setPosition(correctX, correctY);
+                console.log(`🎯 Gun bar position restored to: X=${correctX}, Y=${correctY}`);
+            }
+        });
+    }
+
     addPlayer(data) {
         let id = data.id;
         // Use the current sprite key for new players, or default to empty_hands
-        let spriteKey = (id == this.room.sessionId) ? this.currentSpriteKey : 'empty_hands';
+        let baseSpriteKey = (id == this.room.sessionId) ? this.currentSpriteKey : 'empty_hands';
+        
+        // Get team-specific sprite key
+        let spriteKey = this.getTeamSpriteKey(baseSpriteKey);
+        
         let sprite = this.physics.add.sprite(data.x, data.y, spriteKey).setSize(120, 165);
 
         if (id == this.room.sessionId) {
             this.player = {};
             this.player.sprite = sprite;
             this.player.sprite.setCollideWorldBounds(true);
+            
+            // Enhanced smooth camera following with optimization
             this.cameras.main.startFollow(this.player.sprite);
+            this.cameras.main.setLerp(0.1, 0.1); // Smooth camera movement
+            this.cameras.main.setDeadzone(50, 50); // Don't move camera for small movements
+            this.cameras.main.setZoom(1); // Ensure proper zoom level
+            
             this.physics.add.collider(this.player.sprite, this.map["blockLayer"]);
+            
+            // Update gun bar to show current weapon when player spawns
+            this.updateGunBarImage();
 
         } else {
             this.players[id] = {};
@@ -727,7 +1139,10 @@ stopLowHealthEffects() {
             }
 
             this.currentSpriteKey = spriteKey;
-            this.player.sprite.setTexture(spriteKey);
+            
+            // Get team-specific sprite key
+            const teamSpriteKey = this.getTeamSpriteKey(spriteKey);
+            this.player.sprite.setTexture(teamSpriteKey);
             
             const weapon = this.weaponConfig[spriteKey];
             
@@ -742,6 +1157,9 @@ stopLowHealthEffects() {
             if (this.weaponText) {
                 this.weaponText.setText(weaponInfo);
             }
+            
+            // Update gun bar to reflect current weapon
+            this.updateGunBarImage();
             
             // Optional: Send sprite change to server
             if (this.roomJoined) {
@@ -967,8 +1385,9 @@ createExplosionEffect(x, y) {
 startGrenadeReload() {
     this.isReloading = true;
     
-    // Switch to no_grinad sprite
-    this.player.sprite.setTexture('no_grinad');
+    // Switch to no_grinad sprite (team-specific)
+    const noGrinadSprite = this.getTeamSpriteKey('no_grinad');
+    this.player.sprite.setTexture(noGrinadSprite);
     
     // Update weapon text to show reloading
     if (this.weaponText) {
@@ -978,7 +1397,8 @@ startGrenadeReload() {
     // After reload time, switch back to grinad sprite
     this.time.delayedCall(this.weaponConfig['grinad'].fireRate, () => {
         if (this.currentSpriteKey === 'grinad' && this.player && this.player.sprite) {
-            this.player.sprite.setTexture('grinad');
+            const grinadSprite = this.getTeamSpriteKey('grinad');
+            this.player.sprite.setTexture(grinadSprite);
             this.isReloading = false;
             
             // Update weapon text
