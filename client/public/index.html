@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Experimental game</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/colyseus.js/dist/colyseus.js"></script>
@@ -109,6 +110,84 @@
   color: #0f0f0f;
 }
 
+/* Team Selection Styles */
+#teamSelectionForm {
+  background-color: #1a1a1a;
+  padding: 30px;
+  border: 2px solid #99bb99;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 1000;
+  font-family: 'Silkscreen', sans-serif;
+  max-width: 600px;
+}
+
+#teamSelectionForm h2 {
+  color: #cceedd;
+  font-size: 20px;
+  text-align: center;
+  margin: 0 0 20px;
+}
+
+.team-options {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+}
+
+.team-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border: 2px solid #444444;
+  border-radius: 10px;
+  background-color: #2a2a2a;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.team-option:hover {
+  border-color: #99bb99;
+  background-color: #333333;
+  transform: translateY(-5px);
+}
+
+.team-image {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.team-option h3 {
+  color: #cceedd;
+  font-size: 14px;
+  margin: 0;
+}
+
+.team-btn {
+  padding: 10px 20px;
+  background-color: #99bb99;
+  color: #0f0f0f;
+  border: none;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  border-radius: 20px; 
+  transition: background 0.2s ease;
+  font-family: inherit;
+}
+
+.team-btn:hover {
+  background-color: #cceedd;
+}
+
 #overlay {
   position: absolute;
   width: 100vw;
@@ -129,16 +208,33 @@
 
     <div id="overlay">
 
-
+    <!-- Login Form -->
     <div id="loginForm">
-    <h2>Login</h2>
-    <button id="googleLoginBtn">Login with Google</button>
-    <button class="guestBtn" type="button"> Login as guest </button>
+      <h2>Login</h2>
+      <button id="googleLoginBtn">Login with Google</button>
+      <button class="guestBtn" type="button"> Login as guest </button>
     </div>
-     </div>
+<!-- Team Selection Menu -->
+<div id="teamSelectionForm" style="display: none;">
+  <h2>Choose Your Team</h2>
+  <div class="team-options">
+    <div class="team-option" id="orangeTeam">
+      <img src="assets/Empty_hands.png" alt="Orange Team" class="team-image">
+      <h3>Orange Team</h3>
+      <button class="team-btn" data-team="orange">Select Orange</button>
+    </div>
+    <div class="team-option" id="blueTeam">
+      <img src="assets/Blue_Empty_hands.png" alt="Blue Team" class="team-image">
+      <h3>Blue Team</h3>
+      <button class="team-btn" data-team="blue">Select Blue</button>
+    </div>
+  </div>
+</div>
+
+    </div>
     <!--<script src="bundle.min.js"></script>-->
 
-<script type="text/javascript" src="main.3e54e5617d533a51da5b.js"></script></body>
+<script type="text/javascript" src="main.b624efb4f51b9d3ab255.js"></script></body>
 
 
 
