@@ -261,12 +261,8 @@ exports.outdoor = class extends colyseus.Room {
         
         console.log(`💥 Server: Grenade explosion at (${grenadeData.targetX}, ${grenadeData.targetY}) by ${shooterId}`);
         
-        // Check damage to all players in explosion radius
+        // Check damage to all players in explosion radius (including the thrower)
         for (let playerId in this.state.players) {
-            if (playerId === shooterId) {
-                continue; // Grenade doesn't damage the thrower (optional: remove this line for self-damage)
-            }
-            
             let player = this.state.players[playerId];
             let distance = Math.sqrt(
                 Math.pow(player.x - grenadeData.targetX, 2) + 
@@ -282,7 +278,12 @@ exports.outdoor = class extends colyseus.Room {
                 // Apply damage to player health
                 player.health -= actualDamage;
                 
-                console.log(`💥 Player ${playerId} hit by grenade: distance=${Math.round(distance)}, damage=${actualDamage}, health=${player.health}`);
+                // Log different messages for self-damage vs other players
+                if (playerId === shooterId) {
+                    console.log(`💥 Player ${playerId} hit by their own grenade: distance=${Math.round(distance)}, damage=${actualDamage}, health=${player.health}`);
+                } else {
+                    console.log(`💥 Player ${playerId} hit by grenade from ${shooterId}: distance=${Math.round(distance)}, damage=${actualDamage}, health=${player.health}`);
+                }
                 
                 // Send hit message for each affected player
                 this.broadcast({
@@ -290,7 +291,8 @@ exports.outdoor = class extends colyseus.Room {
                     punished_id: playerId,
                     punisher_id: shooterId,
                     damage: actualDamage,
-                    weaponType: "grenade"
+                    weaponType: "grenade",
+                    selfDamage: playerId === shooterId // Flag to indicate self-damage
                 });
                 
                 // Remove player if health reaches 0 or below

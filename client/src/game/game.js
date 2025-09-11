@@ -900,8 +900,9 @@ export default class Game extends Phaser.Scene {
                     // Remove other players
                     self.removePlayer(sessionId);
                 } else {
-                    // Current player died - handled by death message system
-                    console.log(`☠️  Current player removed from server`);
+                    // Current player died - show restart UI
+                    console.log(`☠️  Current player removed from server - triggering death handler`);
+                    self.handleDeath();
                 }
             }
         });
@@ -938,6 +939,13 @@ export default class Game extends Phaser.Scene {
                 if (message.punished_id == self.room.sessionId) {
                     // Get damage amount from server (or use default)
                     let damage = message.damage || 10;
+                    
+                    // Log different messages for self-damage vs other damage
+                    if (message.selfDamage) {
+                        console.log(`💥 You damaged yourself with your own ${message.weaponType || 'weapon'} for ${damage} damage!`);
+                    } else {
+                        console.log(`💥 You took ${damage} damage from ${message.weaponType || 'weapon'}!`);
+                    }
                     
                     // Use the new damage system with proper damage amount
                     self.takeDamage(damage);
@@ -1217,6 +1225,14 @@ handleDeath() {
 
 showRestartUI() {
     console.log("💀 Showing restart UI with HTML styling");
+    console.log("🔍 Checking if restart UI already exists...");
+    
+    // Remove existing overlay if it exists
+    const existingOverlay = document.getElementById('restartOverlay');
+    if (existingOverlay) {
+        console.log("⚠️ Removing existing restart overlay");
+        existingOverlay.remove();
+    }
     
     // Create HTML overlay with the same styling as login/team selection
     const restartOverlay = document.createElement('div');
@@ -1301,10 +1317,16 @@ showRestartUI() {
         restartButton.style.backgroundColor = '#99bb99';
     });
     
-    // Add click handler
+    // Add click handler with proper context binding
+    const self = this; // Store reference to game instance
     restartButton.addEventListener('click', () => {
-        this.restartGame();
+        console.log("🔄 Restart button clicked!");
+        self.restartGame();
     });
+    
+    console.log("✅ Restart button click handler added successfully");
+    console.log("🔍 Button element:", restartButton);
+    console.log("🔍 Game instance reference:", self);
     
     // Create keyboard instruction
     const instruction = document.createElement('p');
@@ -1337,10 +1359,11 @@ showRestartUI() {
     restartOverlay.appendChild(restartForm);
     document.body.appendChild(restartOverlay);
     
-    // Add keyboard shortcut (R key to restart)
+    // Add keyboard shortcut (R key to restart) with proper context binding
     const keyHandler = (event) => {
         if (event.key.toLowerCase() === 'r') {
-            this.restartGame();
+            console.log("🔄 R key pressed for restart!");
+            self.restartGame();
         }
     };
     document.addEventListener('keydown', keyHandler);
@@ -1348,57 +1371,87 @@ showRestartUI() {
     // Store references for cleanup
     this.restartOverlay = restartOverlay;
     this.keyHandler = keyHandler;
+    
+    console.log("✅ Restart UI fully created and added to page");
+    console.log("🔍 Final overlay element:", this.restartOverlay);
+    console.log("🔍 Button should be clickable now");
 }
 
 restartGame() {
     console.log("🔄 Restarting game - going to team selection...");
+    console.log("🔍 Current overlay element:", this.restartOverlay);
+    console.log("🔍 Current room:", this.room);
+    console.log("🔍 Current game instance:", this.game);
     
     // Clean up HTML overlay
     if (this.restartOverlay) {
+        console.log("✅ Removing restart overlay");
         this.restartOverlay.remove();
         this.restartOverlay = null;
+    } else {
+        console.log("⚠️ No restart overlay to remove");
     }
     
     // Clean up keyboard listener
     if (this.keyHandler) {
+        console.log("✅ Removing keyboard handler");
         document.removeEventListener('keydown', this.keyHandler);
         this.keyHandler = null;
+    } else {
+        console.log("⚠️ No keyboard handler to remove");
     }
     
     // Close current connection
     if (this.room) {
+        console.log("✅ Closing room connection");
         this.room.removeAllListeners();
         this.room.leave();
+    } else {
+        console.log("⚠️ No room connection to close");
     }
     
     // Destroy the current Phaser game
     if (this.game) {
+        console.log("✅ Destroying Phaser game instance");
         this.game.destroy(true);
+    } else {
+        console.log("⚠️ No Phaser game instance to destroy");
     }
     
     // Show the main overlay (login/team selection container)
+    console.log("🔍 Looking for overlay element...");
     const overlay = document.getElementById('overlay');
     if (overlay) {
+        console.log("✅ Found overlay, making it visible");
         overlay.style.display = 'flex';
+    } else {
+        console.log("❌ Could not find overlay element with ID 'overlay'");
     }
     
     // Hide login form and show team selection directly
+    console.log("🔍 Looking for login and team selection forms...");
     const loginForm = document.getElementById('loginForm');
     const teamSelectionForm = document.getElementById('teamSelectionForm');
     
     if (loginForm) {
+        console.log("✅ Found loginForm, hiding it");
         loginForm.style.display = 'none';
+    } else {
+        console.log("⚠️ Could not find loginForm element");
     }
     
     if (teamSelectionForm) {
+        console.log("✅ Found teamSelectionForm, showing it");
         teamSelectionForm.style.display = 'flex';
+    } else {
+        console.log("❌ Could not find teamSelectionForm element");
     }
     
     // Reset any previous team selection if needed
     window.gameConfig = window.gameConfig || {};
     // Don't reset selectedTeam so user can keep their previous choice
     
-    console.log("✅ Redirected to team selection screen");
+    console.log("✅ Restart process completed - should be on team selection screen");
 }
 
 animateLowHealthWarning() {
