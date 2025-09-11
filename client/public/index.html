@@ -2,7 +2,6 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Experimental game</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/colyseus.js/dist/colyseus.js"></script>
@@ -23,6 +22,12 @@
       align-items: center;
       }
 
+      /* Game canvas cursor styling for cross-browser compatibility */
+      canvas {
+        margin: 0;
+        cursor: url('./assets/cursor.cur') 16 16, crosshair !important;
+      }
+
       #overlay {
   position: absolute;
   top: 0;
@@ -35,10 +40,6 @@
   pointer-events: none; 
   z-index: 10;
 }
-
-      canvas {
-        margin: 0;
-      }
 
     
   #loginForm {
@@ -234,7 +235,7 @@
     </div>
     <!--<script src="bundle.min.js"></script>-->
 
-<script type="text/javascript" src="main.b624efb4f51b9d3ab255.js"></script></body>
+<script type="text/javascript" src="main.baaf29e94e530b284421.js"></script></body>
 
 
 

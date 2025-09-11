@@ -133,6 +133,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Show welcome alert when page loads
-  alert("Welcome to Battle Arena!\n\nHow to play:\n- Use arrow keys to move\n- Click to shoot\n- One hit = you're out\n\nBring your friends and have fun!");
+  // alert("Welcome to Battle Arena!\n\nHow to play:\n- Use arrow keys to move\n- Click to shoot\n- One hit = you're out\n\nBring your friends and have fun!");
 
 });

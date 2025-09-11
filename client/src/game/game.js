@@ -59,12 +59,38 @@ export default class Game extends Phaser.Scene {
             damageFlashDuration: 100
         };
         
+        // Enemy health bar config - smaller bars above each enemy
+        this.ENEMY_HEALTH_BAR_CONFIG = {
+            width: 60,
+            height: 8,
+            offsetY: -40, // Above the player sprite
+            backgroundColor: 0x000000,
+            borderColor: 0xffffff,
+            healthColor: 0x00ff00,
+            damageColor: 0xff0000,
+            borderThickness: 1
+        };
+        
         // Gun bar config constants - positioned in bottom right corner
         this.GUN_BAR_CONFIG = {
             width: 260,
             height: 80,
             offsetX: 20,  // Distance from right edge
             offsetY: 20   // Distance from bottom edge
+        };
+        
+        // Bullet config constants - visual properties of bullets
+        this.BULLET_CONFIG = {
+            width: 30,           // Bullet width in pixels (minimum 4 for visibility)
+            height: 20,         // Bullet height in pixels (minimum 8 for visibility)
+            scale: 1.0,         // Overall scale multiplier (applied after width/height)
+            rotation: Math.PI/2,        // Additional rotation offset in radians (0 = no extra rotation)
+                               // Use Math.PI/2 for 90°, Math.PI for 180°, -Math.PI/2 for -90°
+            tint: 0xffffff,     // Bullet color tint (0xffffff = white, 0xff0000 = red, etc.)
+            alpha: 1.0,         // Bullet transparency (1.0 = fully opaque, 0.5 = half transparent)
+            depth: 10,          // Display depth (higher = in front)
+            trail: false,       // Enable bullet trail effect (not implemented yet)
+            trailLength: 5      // Trail length if enabled (not implemented yet)
         };
         
         // Add current sprite tracker
@@ -353,7 +379,9 @@ export default class Game extends Phaser.Scene {
     this.bulletSound = this.sound.add('bulletSound');
 
     // --- Cursor & Map ---
-    this.input.setDefaultCursor(`url('${cursorImage}'), crosshair`);
+    // Use CSS cursor for better cross-browser compatibility
+    this.game.canvas.style.cursor = `url('assets/cursor.cur') 16 16, crosshair`;
+    
     this.map = this.make.tilemap({ key: "map" });
 
     const tileset = this.map.addTilesetImage("battle-royale", "tiles");
@@ -417,12 +445,24 @@ export default class Game extends Phaser.Scene {
     // =============================
     // 🎯 Performance Monitoring & FPS Counter
     // =============================
-    this.fpsText = this.add.text(this.cameras.main.width - 120, 10, 'FPS: 60', {
-        font: '16px monospace',
+    this.fpsText = this.add.text(10, 10, 'FPS: 60', {
+        font: 'bold 14px Arial, sans-serif',
         fill: '#00ff00',
-        backgroundColor: '#000000',
-        padding: { x: 8, y: 4 }
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: { x: 10, y: 6 },
+        stroke: '#000000',
+        strokeThickness: 2
     }).setScrollFactor(0).setDepth(1000);
+    
+    // Position FPS counter in top-right for Chrome compatibility
+    this.fpsText.setPosition(this.cameras.main.width - this.fpsText.width - 10, 10);
+    
+    // Add window resize handler for FPS counter repositioning
+    this.scale.on('resize', (gameSize, baseSize, displaySize, resolution) => {
+        if (this.fpsText) {
+            this.fpsText.setPosition(gameSize.width - this.fpsText.width - 10, 10);
+        }
+    });
 
     // =============================
     // �🎮 Image-based Health Bar System
@@ -621,19 +661,34 @@ export default class Game extends Phaser.Scene {
             this.performanceStats.frameCount = 0;
             this.performanceStats.lastTime = now;
             
-            // Update FPS display
-            let color = '#00ff00'; // Green
-            if (this.performanceStats.fps < 30) color = '#ff0000'; // Red
-            else if (this.performanceStats.fps < 45) color = '#ffff00'; // Yellow
+            // Update FPS display with color coding
+            let color = '#00ff00'; // Green for good FPS (45+)
+            let bgColor = 'rgba(0, 50, 0, 0.8)'; // Dark green background
             
-            this.fpsText.setText(`FPS: ${this.performanceStats.fps}`)
-                       .setColor(color);
+            if (this.performanceStats.fps < 30) {
+                color = '#ff4444'; // Red for poor FPS
+                bgColor = 'rgba(50, 0, 0, 0.8)'; // Dark red background
+            } else if (this.performanceStats.fps < 45) {
+                color = '#ffdd44'; // Yellow for medium FPS
+                bgColor = 'rgba(50, 50, 0, 0.8)'; // Dark yellow background
+            }
             
-            // Memory usage (if available)
+            // Create display text
+            let displayText = `FPS: ${this.performanceStats.fps}`;
+            
+            // Add memory usage if available (Chrome supports this)
             if (performance.memory) {
                 const memMB = Math.round(performance.memory.usedJSHeapSize / 1048576);
-                this.fpsText.setText(`FPS: ${this.performanceStats.fps} | MEM: ${memMB}MB`);
+                displayText += ` | RAM: ${memMB}MB`;
             }
+            
+            // Update text and styling
+            this.fpsText.setText(displayText)
+                       .setColor(color)
+                       .setStyle({ backgroundColor: bgColor });
+            
+            // Reposition to ensure it stays in the top-right corner
+            this.fpsText.setPosition(this.cameras.main.width - this.fpsText.width - 10, 10);
         }
     }
 
@@ -662,11 +717,13 @@ export default class Game extends Phaser.Scene {
                     // If the player hasn't been created yet
                     if (self.players[id] == undefined && id != this.room.sessionId) { // Make sure you don't create yourself
                         let data = state.players[id];
+                        console.log(`🎮 Creating player from initial state: ${id}`, data);
                         self.addPlayer({
                             id: id,
                             x: data.x,
                             y: data.y,
-                            rotation: data.rotation || 0
+                            rotation: data.rotation || 0,
+                            team: data.team || 'orange' // Include team data
                         });
                         let player_sprite = self.players[id].sprite;
                         player_sprite.target_x = state.players[id].x; // Update target, not actual position, so we can interpolate
@@ -716,6 +773,12 @@ export default class Game extends Phaser.Scene {
                         self.player.sprite.setCollideWorldBounds(true);
                         self.cameras.main.startFollow(self.player.sprite);
                         self.cameras.main.setLerp(0.1, 0.1);
+                    } else {
+                        // THIS IS AN ENEMY PLAYER - CREATE HEALTH BAR!
+                        sprite.setTint("0xff0000"); // Red tint for enemies
+                        console.log(`🏥 CREATING HEALTH BAR for new enemy ${sessionId}`);
+                        self.createEnemyHealthBar(sessionId, sprite);
+                        console.log(`🎮 Enemy player ${sessionId} added with health bar via onAdd`);
                     }
                 }
                 
@@ -741,6 +804,12 @@ export default class Game extends Phaser.Scene {
                                     self.players[sessionId].sprite.setTexture(change.value);
                                     console.log(`🎨 State change: Player ${sessionId} sprite → ${change.value}`);
                                 }
+                            } else if (change.field == "health") {
+                                // Handle health changes for enemy players
+                                if (self.players[sessionId] && self.players[sessionId].healthBar) {
+                                    self.updateEnemyHealthBar(sessionId, change.value);
+                                    console.log(`❤️ Player ${sessionId} health → ${change.value}`);
+                                }
                             }
                         });
                     };
@@ -748,7 +817,33 @@ export default class Game extends Phaser.Scene {
             }
 
             this.room.state.bullets.onAdd = (bullet, sessionId) => {
-                self.bullets[bullet.index] = self.physics.add.sprite(bullet.x, bullet.y, 'bullet').setRotation(bullet.angle);
+                // Create bullet sprite with configured properties
+                console.log(`🔫 Creating bullet with config:`, {
+                    width: self.BULLET_CONFIG.width,
+                    height: self.BULLET_CONFIG.height,
+                    scale: self.BULLET_CONFIG.scale,
+                    tint: `0x${self.BULLET_CONFIG.tint.toString(16)}`,
+                    alpha: self.BULLET_CONFIG.alpha
+                });
+                
+                const bulletSprite = self.physics.add.sprite(bullet.x, bullet.y, 'bullet')
+                    .setRotation(bullet.angle + self.BULLET_CONFIG.rotation);
+                
+                // Set size using displaySize first, then apply scale multiplier
+                bulletSprite.setDisplaySize(self.BULLET_CONFIG.width, self.BULLET_CONFIG.height);
+                if (self.BULLET_CONFIG.scale !== 1.0) {
+                    bulletSprite.setScale(bulletSprite.scaleX * self.BULLET_CONFIG.scale, 
+                                         bulletSprite.scaleY * self.BULLET_CONFIG.scale);
+                }
+                
+                bulletSprite
+                    .setTint(self.BULLET_CONFIG.tint)
+                    .setAlpha(self.BULLET_CONFIG.alpha)
+                    .setDepth(self.BULLET_CONFIG.depth);
+                
+                self.bullets[bullet.index] = bulletSprite;
+                
+                console.log(`🔫 Created bullet ${bullet.index} - Final size: ${bulletSprite.displayWidth}x${bulletSprite.displayHeight}`);
 
                 // If you want to track changes on a child object inside a map, this is a common pattern:
                 bullet.onChange = function (changes) {
@@ -866,7 +961,7 @@ export default class Game extends Phaser.Scene {
         });
 
         this.room.onError.add(() => {
-            alert(room.sessionId + " couldn't join " + room.name);
+            console.error("❌ Connection error: Couldn't join room");
         });
 
     }
@@ -896,6 +991,16 @@ export default class Game extends Phaser.Scene {
             if (Phaser.Input.Keyboard.JustDown(this.testDamageKey)) {
                 this.takeDamage(20); // Deal 20 damage for testing
                 console.log(`Health after H key press: ${this.currentHealth}`);
+                
+                // Also test enemy health bars
+                for (let id in this.players) {
+                    if (this.players[id].healthBar) {
+                        const currentHealth = this.players[id].healthBar.currentHealth;
+                        const newHealth = Math.max(0, currentHealth - 15);
+                        this.updateEnemyHealthBar(id, newHealth);
+                        console.log(`🧪 Testing enemy ${id} health: ${currentHealth} → ${newHealth}`);
+                    }
+                }
             }
         }
 
@@ -916,6 +1021,9 @@ export default class Game extends Phaser.Scene {
                     p.rotation += angleDiff * this.PERFORMANCE_CONFIG.INTERPOLATION_RATE;
                 }
             }
+            
+            // Update enemy health bar position to follow the player
+            this.updateEnemyHealthBarPosition(id);
         }
 
         if (this.player) {
@@ -1083,9 +1191,7 @@ takeDamage(amount) {
 }
 
 handleDeath() {
-    console.log(`☠️  Player death - notifying server and cleaning up`);
-    
-    this.closingMessage = "You have been killed.\nTo restart, reload the page";
+    console.log(`☠️  Player death - showing restart UI`);
     
     // Notify server that this player has died
     if (this.roomJoined && this.room) {
@@ -1103,11 +1209,196 @@ handleDeath() {
     delete this.player;
     this.stopLowHealthEffects();
     
-    // Add a small delay before closing to allow server state synchronization
+    // Add a small delay before showing restart UI
     setTimeout(() => {
-        alert(this.closingMessage);
-        client.close();
+        this.showRestartUI();
     }, 1000); // 1 second delay to allow other players to see the death
+}
+
+showRestartUI() {
+    console.log("💀 Showing restart UI with HTML styling");
+    
+    // Create HTML overlay with the same styling as login/team selection
+    const restartOverlay = document.createElement('div');
+    restartOverlay.id = 'restartOverlay';
+    restartOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        font-family: 'Press Start 2P', monospace;
+    `;
+    
+    // Create the restart form using your exact CSS specifications
+    const restartForm = document.createElement('div');
+    restartForm.style.cssText = `
+        background-color: rgb(26, 26, 26);
+        padding: 50px;
+        border: 2px solid rgb(153, 187, 153);
+        border-radius: 20px;
+        width: 500px;
+        height: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 50px;
+        font-family: "Press Start 2P", monospace;
+    `;
+    
+    // Create death message
+    const deathTitle = document.createElement('h2');
+    deathTitle.textContent = 'GAME OVER';
+    deathTitle.style.cssText = `
+        color: #ff0000;
+        font-size: 32px;
+        text-align: center;
+        margin: 0;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        animation: pulse 2s infinite;
+    `;
+    
+    // Create subtitle
+    const subtitle = document.createElement('p');
+    subtitle.textContent = 'You have been eliminated';
+    subtitle.style.cssText = `
+        color: #cceedd;
+        font-size: 16px;
+        text-align: center;
+        margin: 0;
+    `;
+    
+    // Create restart button using enhanced styling for the larger container
+    const restartButton = document.createElement('button');
+    restartButton.textContent = 'RESTART GAME';
+    restartButton.style.cssText = `
+        padding: 18px 36px;
+        background-color: rgb(153, 187, 153);
+        color: #0f0f0f;
+        border: none;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        text-transform: uppercase;
+        border-radius: 20px;
+        transition: background 0.2s ease;
+        font-family: inherit;
+        width: 70%;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    `;
+    
+    // Add hover effects matching login buttons
+    restartButton.addEventListener('mouseenter', () => {
+        restartButton.style.backgroundColor = '#cceedd';
+    });
+    restartButton.addEventListener('mouseleave', () => {
+        restartButton.style.backgroundColor = '#99bb99';
+    });
+    
+    // Add click handler
+    restartButton.addEventListener('click', () => {
+        this.restartGame();
+    });
+    
+    // Create keyboard instruction
+    const instruction = document.createElement('p');
+    instruction.textContent = 'Press R key to restart quickly';
+    instruction.style.cssText = `
+        color: #cceedd;
+        font-size: 12px;
+        text-align: center;
+        margin: 0;
+        opacity: 0.8;
+    `;
+    
+    // Add CSS animation for pulse effect
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Assemble the form
+    restartForm.appendChild(deathTitle);
+    restartForm.appendChild(subtitle);
+    restartForm.appendChild(restartButton);
+    restartForm.appendChild(instruction);
+    
+    restartOverlay.appendChild(restartForm);
+    document.body.appendChild(restartOverlay);
+    
+    // Add keyboard shortcut (R key to restart)
+    const keyHandler = (event) => {
+        if (event.key.toLowerCase() === 'r') {
+            this.restartGame();
+        }
+    };
+    document.addEventListener('keydown', keyHandler);
+    
+    // Store references for cleanup
+    this.restartOverlay = restartOverlay;
+    this.keyHandler = keyHandler;
+}
+
+restartGame() {
+    console.log("🔄 Restarting game - going to team selection...");
+    
+    // Clean up HTML overlay
+    if (this.restartOverlay) {
+        this.restartOverlay.remove();
+        this.restartOverlay = null;
+    }
+    
+    // Clean up keyboard listener
+    if (this.keyHandler) {
+        document.removeEventListener('keydown', this.keyHandler);
+        this.keyHandler = null;
+    }
+    
+    // Close current connection
+    if (this.room) {
+        this.room.removeAllListeners();
+        this.room.leave();
+    }
+    
+    // Destroy the current Phaser game
+    if (this.game) {
+        this.game.destroy(true);
+    }
+    
+    // Show the main overlay (login/team selection container)
+    const overlay = document.getElementById('overlay');
+    if (overlay) {
+        overlay.style.display = 'flex';
+    }
+    
+    // Hide login form and show team selection directly
+    const loginForm = document.getElementById('loginForm');
+    const teamSelectionForm = document.getElementById('teamSelectionForm');
+    
+    if (loginForm) {
+        loginForm.style.display = 'none';
+    }
+    
+    if (teamSelectionForm) {
+        teamSelectionForm.style.display = 'flex';
+    }
+    
+    // Reset any previous team selection if needed
+    window.gameConfig = window.gameConfig || {};
+    // Don't reset selectedTeam so user can keep their previous choice
+    
+    console.log("✅ Redirected to team selection screen");
 }
 
 animateLowHealthWarning() {
@@ -1137,6 +1428,108 @@ stopLowHealthEffects() {
         this.heartbeatSound = null;
     }
 }
+
+    // =============================
+    // 👥 Enemy Health Bar System
+    // =============================
+
+    createEnemyHealthBar(playerId, playerSprite) {
+        console.log(`🏥 CREATING HEALTH BAR for player ${playerId} at:`, playerSprite.x, playerSprite.y);
+        
+        // Create a simple, very visible health bar using graphics
+        const healthBar = this.add.graphics();
+        
+        // Draw background (black rectangle)
+        healthBar.fillStyle(0x000000);
+        healthBar.fillRect(-30, -50, 60, 10);
+        
+        // Draw border (white outline)
+        healthBar.lineStyle(2, 0xffffff);
+        healthBar.strokeRect(-30, -50, 60, 10);
+        
+        // Draw health fill (green rectangle)
+        healthBar.fillStyle(0x00ff00);
+        healthBar.fillRect(-29, -49, 58, 8);
+        
+        // Position the health bar
+        healthBar.x = playerSprite.x;
+        healthBar.y = playerSprite.y;
+        healthBar.setDepth(100);
+        
+        // Store health bar
+        this.players[playerId].healthBar = {
+            graphics: healthBar,
+            maxHealth: 100,
+            currentHealth: 100,
+            width: 58 // Inner width for health fill
+        };
+        
+        console.log(`✅ HEALTH BAR CREATED for player ${playerId}!`);
+    }
+
+    updateEnemyHealthBar(playerId, newHealth) {
+        const player = this.players[playerId];
+        if (!player || !player.healthBar) {
+            console.log(`⚠️ No health bar found for player ${playerId}`);
+            return;
+        }
+        
+        const healthBar = player.healthBar;
+        
+        // Update current health
+        const oldHealth = healthBar.currentHealth;
+        healthBar.currentHealth = Math.max(0, newHealth);
+        
+        console.log(`❤️ Updating health for ${playerId}: ${oldHealth} → ${healthBar.currentHealth}`);
+        
+        // Calculate health percentage
+        const healthPercentage = healthBar.currentHealth / healthBar.maxHealth;
+        
+        // Clear and redraw the health bar
+        healthBar.graphics.clear();
+        
+        // Draw background (black rectangle)
+        healthBar.graphics.fillStyle(0x000000);
+        healthBar.graphics.fillRect(-30, -50, 60, 10);
+        
+        // Draw border (white outline)
+        healthBar.graphics.lineStyle(2, 0xffffff);
+        healthBar.graphics.strokeRect(-30, -50, 60, 10);
+        
+        // Determine health color
+        let healthColor;
+        if (healthPercentage > 0.6) {
+            healthColor = 0x00ff00; // Green
+        } else if (healthPercentage > 0.3) {
+            healthColor = 0xffff00; // Yellow
+        } else {
+            healthColor = 0xff0000; // Red
+        }
+        
+        // Draw health fill based on current health
+        const fillWidth = healthBar.width * healthPercentage;
+        if (fillWidth > 0) {
+            healthBar.graphics.fillStyle(healthColor);
+            healthBar.graphics.fillRect(-29, -49, fillWidth, 8);
+        }
+        
+        console.log(`🎨 Health bar updated for ${playerId} - ${(healthPercentage * 100).toFixed(1)}% health`);
+    }
+
+    updateEnemyHealthBarPosition(playerId) {
+        const player = this.players[playerId];
+        if (!player || !player.healthBar || !player.sprite) return;
+        
+        const sprite = player.sprite;
+        const healthBar = player.healthBar;
+        
+        // Update position to follow the player sprite
+        healthBar.graphics.x = sprite.x;
+        healthBar.graphics.y = sprite.y;
+        
+        // Ensure health bar is visible
+        healthBar.graphics.setVisible(true);
+    }
 
     // =============================
     // 🔫 Gun Bar System Methods
@@ -1201,9 +1594,58 @@ stopLowHealthEffects() {
         });
     }
 
+    // =============================
+    // 🔫 Bullet Configuration System
+    // =============================
+
+    updateBulletConfig(newConfig) {
+        // Merge new config with existing config
+        this.BULLET_CONFIG = { ...this.BULLET_CONFIG, ...newConfig };
+        console.log(`🔫 Updated bullet config:`, this.BULLET_CONFIG);
+        
+        // Apply changes to existing bullets if any
+        for (let index in this.bullets) {
+            if (this.bullets[index] && this.bullets[index].setDisplaySize) {
+                this.applyBulletConfig(this.bullets[index]);
+            }
+        }
+    }
+
+    applyBulletConfig(bulletSprite) {
+        // Set size using displaySize first, then apply scale multiplier
+        bulletSprite.setDisplaySize(this.BULLET_CONFIG.width, this.BULLET_CONFIG.height);
+        if (this.BULLET_CONFIG.scale !== 1.0) {
+            bulletSprite.setScale(bulletSprite.scaleX * this.BULLET_CONFIG.scale, 
+                                 bulletSprite.scaleY * this.BULLET_CONFIG.scale);
+        }
+        
+        bulletSprite
+            .setTint(this.BULLET_CONFIG.tint)
+            .setAlpha(this.BULLET_CONFIG.alpha)
+            .setDepth(this.BULLET_CONFIG.depth);
+    }
+
+    // Bullet preset configurations for different bullet types
+    setBulletPreset(presetName) {
+        const presets = {
+            'small': { width: 6, height: 12, scale: 1.0, tint: 0xffffff },
+            'normal': { width: 8, height: 16, scale: 1.0, tint: 0xffffff },
+            'large': { width: 12, height: 20, scale: 1.0, tint: 0xffffff }
+        };
+        
+        if (presets[presetName]) {
+            this.updateBulletConfig(presets[presetName]);
+            console.log(`🎯 Applied bullet preset: ${presetName}`);
+        } else {
+            console.warn(`❌ Unknown bullet preset: ${presetName}. Available: ${Object.keys(presets).join(', ')}`);
+        }
+    }
+
     addPlayer(data) {
         let id = data.id;
         let playerTeam = data.team || 'orange';
+        
+        console.log(`🎮 ADDING PLAYER: ${id}, team: ${playerTeam}, isMe: ${id == this.room.sessionId}`);
         
         // Use the current sprite key for own player, or default to empty_hands for others
         let baseSpriteKey = (id == this.room.sessionId) ? this.currentSpriteKey : 'empty_hands';
@@ -1234,6 +1676,7 @@ stopLowHealthEffects() {
         let sprite = this.physics.add.sprite(data.x, data.y, spriteKey).setSize(120, 165);
 
         if (id == this.room.sessionId) {
+            console.log(`👤 THIS IS ME - Setting up my player`);
             this.player = {};
             this.player.sprite = sprite;
             this.player.sprite.setCollideWorldBounds(true);
@@ -1250,10 +1693,16 @@ stopLowHealthEffects() {
             this.updateGunBarImage();
 
         } else {
+            console.log(`👥 THIS IS ENEMY - Setting up enemy player`);
             this.players[id] = {};
             this.players[id].sprite = sprite;
             this.players[id].sprite.setTint("0xff0000");
             this.players[id].sprite.setRotation(data.rotation);
+            
+            // Create health bar for enemy player
+            console.log(`🏥 ABOUT TO CREATE HEALTH BAR for enemy ${id}`);
+            this.createEnemyHealthBar(id, sprite);
+            console.log(`🎮 Enemy player ${id} added with health bar`);
         }
     }
 
@@ -1264,6 +1713,12 @@ stopLowHealthEffects() {
         
         if (this.players[id] && this.players[id].sprite) {
             this.players[id].sprite.destroy();
+            
+            // Clean up enemy health bar
+            if (this.players[id].healthBar && this.players[id].healthBar.graphics) {
+                this.players[id].healthBar.graphics.destroy();
+            }
+            
             delete this.players[id];
             console.log(`✅ Successfully removed player: ${id}`);
         } else {
@@ -1272,9 +1727,18 @@ stopLowHealthEffects() {
     }
 
     rotatePlayer(pointer = this.input.activePointer) {
+        if (!this.player || !this.player.sprite) return;
+        
         let player = this.player.sprite;
-        let angle = Phaser.Math.Angle.Between(player.x, player.y, pointer.x + this.cameras.main.scrollX, pointer.y + this.cameras.main.scrollY)
-        player.setRotation(angle + Math.PI / 2);
+        // Calculate world coordinates considering camera position
+        let worldX = pointer.x + this.cameras.main.scrollX;
+        let worldY = pointer.y + this.cameras.main.scrollY;
+        
+        // Calculate angle from player to cursor
+        let angle = Phaser.Math.Angle.Between(player.x, player.y, worldX, worldY);
+        
+        // Fix for Chrome cursor reversal issue - use negative PI/2 offset
+        player.setRotation(angle - Math.PI / 2);
     }
 
     removeBullet(index) {
@@ -1403,9 +1867,9 @@ fireWeapon(weapon, pointer) {
             bulletAngle += (Math.random() - 0.5) * weapon.spread;
         }
         
-        // Calculate bullet velocity
-        let speed_x = Math.cos(bulletAngle + Math.PI / 2) * (weapon.bulletSpeed / 16);
-        let speed_y = Math.sin(bulletAngle + Math.PI / 2) * (weapon.bulletSpeed / 16);
+        // Calculate bullet velocity with corrected angle
+        let speed_x = Math.cos(bulletAngle - Math.PI / 2) * (weapon.bulletSpeed / 16);
+        let speed_y = Math.sin(bulletAngle - Math.PI / 2) * (weapon.bulletSpeed / 16);
         
         // Send bullet data to server with weapon info
         this.room.send({
