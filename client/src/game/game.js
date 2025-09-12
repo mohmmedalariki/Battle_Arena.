@@ -1,22 +1,28 @@
-"use-strict"
+"use strict";
 
 import Phaser from "phaser";
-import emptyHandsImage from "./../assets/Empty_hands.png"
-import klakinImage from "./../assets/Klakin.png"
-import shootGunImage from "./../assets/ShootGun.png"
-import grinadImage from "./../assets/Grinad.png"
-import noGrinadImage from "./../assets/No_grinad.png"
-import blueEmptyHandsImage from "./../assets/Blue_Empty_hands.png"
-import blueKlakinImage from "./../assets/Blue_Klakin.png"
-import blueShootGunImage from "./../assets/Blue_ShootGun.png"
-import blueGrinadImage from "./../assets/Blue_Grinad.png"
-import theGrinadImage from "./../assets/The_grinad.png"
-import explosion1Image from "./../assets/Explosion1.png"  
-import explosion2Image from "./../assets/Explosion2.png"  
-import explosion3Image from "./../assets/Explosion3.png"  
-import explosion4Image from "./../assets/Explosion4.png"  
-import explosion5Image from "./../assets/Explosion5.png"  
-import explosion6Image from "./../assets/Explosion6.png"  
+
+// Asset imports
+import emptyHandsImage from "./../assets/Empty_hands.png";
+import klakinImage from "./../assets/Klakin.png";
+import shootGunImage from "./../assets/ShootGun.png";
+import grinadImage from "./../assets/Grinad.png";
+import noGrinadImage from "./../assets/No_grinad.png";
+import blueEmptyHandsImage from "./../assets/Blue_Empty_hands.png";
+import blueKlakinImage from "./../assets/Blue_Klakin.png";
+import blueShootGunImage from "./../assets/Blue_ShootGun.png";
+import blueGrinadImage from "./../assets/Blue_Grinad.png";
+import theGrinadImage from "./../assets/The_grinad.png";
+
+// Explosion effects
+import explosion1Image from "./../assets/Explosion1.png";  
+import explosion2Image from "./../assets/Explosion2.png";  
+import explosion3Image from "./../assets/Explosion3.png";  
+import explosion4Image from "./../assets/Explosion4.png";  
+import explosion5Image from "./../assets/Explosion5.png";  
+import explosion6Image from "./../assets/Explosion6.png";  
+
+// UI Elements
 import healthBar1Image from "./../assets/HealthBar1.png";
 import healthBar2Image from "./../assets/HealthBar2.png";
 import healthBar3Image from "./../assets/HealthBar3.png";
@@ -26,85 +32,215 @@ import gunBar1Image from "./../assets/GunBar1.png";
 import gunBar2Image from "./../assets/GunBar2.png";
 import gunBar3Image from "./../assets/GunBar3.png";
 import gunBar4Image from "./../assets/GunBar4.png";
+
+// Map assets
 import outdoor from "./../assets/tilemaps/battle-royale1.json";
 import outdoorImage from "./../assets/tilemaps/battle-royale.png";
+
+// Game objects
 import bulletImage from "./../assets/bullet.png";
 import cursorImage from "./../assets/cursor.cur";
+
+// Audio assets
 import bulletSound from "./../assets/sound/bulletSound.mp3";
 import backgroundMusic1 from "./../assets/sound/backgroundMusic1.mp3";
 import backgroundMusic2 from "./../assets/sound/backgroundMusic2.mp3";
+
+// Multiplayer
 import * as Colyseus from "colyseus.js";
 
-var gameConfig = require('./../../config.json');
+const gameConfig = require('./../../config.json');
 
-const endpoint = (window.location.hostname === "localhost") 
-    ? `ws://localhost:${gameConfig.serverDevPort}` 
-    : `${window.location.protocol.replace("http", "ws")}//${window.location.hostname}:${gameConfig.serverDevPort}`;
+/**
+ * Game Configuration and Constants
+ */
+const GAME_CONSTANTS = {
+    SERVER: {
+        DEV_PORT: gameConfig.serverDevPort,
+        ENDPOINT: (window.location.hostname === "localhost") 
+            ? `ws://localhost:${gameConfig.serverDevPort}` 
+            : `${window.location.protocol.replace("http", "ws")}//${window.location.hostname}:${gameConfig.serverDevPort}`
+    },
+    
+    HEALTH_BAR: {
+        width: 200,
+        height: 50,
+        x: 20,
+        y: 20,
+        borderRadius: 8,
+        borderThickness: 2,
+        animationDuration: 400,
+        damageFlashDuration: 100
+    },
+    
+    ENEMY_HEALTH_BAR: {
+        width: 60,
+        height: 8,
+        offsetY: -40,
+        backgroundColor: 0x000000,
+        borderColor: 0xffffff,
+        healthColor: 0x00ff00,
+        damageColor: 0xff0000,
+        borderThickness: 1
+    },
+    
+    GUN_BAR: {
+        width: 260,
+        height: 80,
+        offsetX: 20,
+        offsetY: 20
+    },
+    
+    BULLET: {
+        width: 30,
+        height: 20,
+        scale: 1.0,
+        rotation: Math.PI/2,
+        tint: 0xffffff,
+        alpha: 1.0,
+        depth: 10,
+        trail: false,
+        trailLength: 5
+    },
+    
+    PERFORMANCE: {
+        INTERPOLATION_RATE: 0.15,
+        MAX_INTERPOLATION_DISTANCE: 100,
+        REDUCED_INTERPOLATION_RATE: 0.05
+    },
+    
+    WEAPON_SWITCHING: {
+        COOLDOWN_MS: 200,
+        SCROLL_THRESHOLD: 1.0,
+        ACCUMULATOR_DECAY: 0.95
+    },
+    
+    GAME_MODES: {
+        TEAM: 'team',
+        FFA: 'ffa'
+    },
+    
+    TEAMS: {
+        BLUE: 'blue',
+        ORANGE: 'orange'
+    }
+};
 
 // Create the Colyseus client instance
-const client = new Colyseus.Client(endpoint);
+const client = new Colyseus.Client(GAME_CONSTANTS.SERVER.ENDPOINT);
 
+/**
+ * Professional Logger System
+ */
+class GameLogger {
+    static logLevel = 'INFO'; // 'DEBUG', 'INFO', 'WARN', 'ERROR'
+    
+    static debug(message, data = null) {
+        if (this.logLevel === 'DEBUG') {
+            console.log(`🔍 [DEBUG] ${message}`, data || '');
+        }
+    }
+    
+    static info(message, data = null) {
+        if (['DEBUG', 'INFO'].includes(this.logLevel)) {
+            console.log(`ℹ️ [INFO] ${message}`, data || '');
+        }
+    }
+    
+    static warn(message, data = null) {
+        if (['DEBUG', 'INFO', 'WARN'].includes(this.logLevel)) {
+            console.warn(`⚠️ [WARN] ${message}`, data || '');
+        }
+    }
+    
+    static error(message, data = null) {
+        console.error(`❌ [ERROR] ${message}`, data || '');
+    }
+}
+
+/**
+ * Main Game Scene for Battle Arena
+ * Handles multiplayer gameplay, weapon systems, and UI
+ */
 export default class Game extends Phaser.Scene {
     constructor() {
         super("Game");
-        // Add health bar config constants - positioned in top left corner
-        this.HEALTH_BAR_CONFIG = {
-            width: 200,
-            height: 50,
-            x: 20,
-            y: 20,
-            borderRadius: 8,
-            borderThickness: 2,
-            animationDuration: 400,
-            damageFlashDuration: 100
-        };
         
-        // Enemy health bar config - smaller bars above each enemy
-        this.ENEMY_HEALTH_BAR_CONFIG = {
-            width: 60,
-            height: 8,
-            offsetY: -40, // Above the player sprite
-            backgroundColor: 0x000000,
-            borderColor: 0xffffff,
-            healthColor: 0x00ff00,
-            damageColor: 0xff0000,
-            borderThickness: 1
-        };
+        // Initialize configuration constants
+        this.HEALTH_BAR_CONFIG = GAME_CONSTANTS.HEALTH_BAR;
+        this.ENEMY_HEALTH_BAR_CONFIG = GAME_CONSTANTS.ENEMY_HEALTH_BAR;
+        this.GUN_BAR_CONFIG = GAME_CONSTANTS.GUN_BAR;
+        this.BULLET_CONFIG = GAME_CONSTANTS.BULLET;
+        this.PERFORMANCE_CONFIG = GAME_CONSTANTS.PERFORMANCE;
         
-        // Gun bar config constants - positioned in bottom right corner
-        this.GUN_BAR_CONFIG = {
-            width: 260,
-            height: 80,
-            offsetX: 20,  // Distance from right edge
-            offsetY: 20   // Distance from bottom edge
-        };
-        
-        // Bullet config constants - visual properties of bullets
-        this.BULLET_CONFIG = {
-            width: 30,           // Bullet width in pixels (minimum 4 for visibility)
-            height: 20,         // Bullet height in pixels (minimum 8 for visibility)
-            scale: 1.0,         // Overall scale multiplier (applied after width/height)
-            rotation: Math.PI/2,        // Additional rotation offset in radians (0 = no extra rotation)
-                               // Use Math.PI/2 for 90°, Math.PI for 180°, -Math.PI/2 for -90°
-            tint: 0xffffff,     // Bullet color tint (0xffffff = white, 0xff0000 = red, etc.)
-            alpha: 1.0,         // Bullet transparency (1.0 = fully opaque, 0.5 = half transparent)
-            depth: 10,          // Display depth (higher = in front)
-            trail: false,       // Enable bullet trail effect (not implemented yet)
-            trailLength: 5      // Trail length if enabled (not implemented yet)
-        };
-        
-        // Add current sprite tracker
+        // Game state
         this.currentSpriteKey = 'empty_hands';
-
-        // Performance Optimizations
-        this.PERFORMANCE_CONFIG = {
-            NETWORK_SEND_RATE: 60,           // Send updates 60 times per second max
-            INTERPOLATION_RATE: 0.15,        // Smooth interpolation
-            OBJECT_POOL_SIZE: 50,            // Pre-allocate objects
-            POSITION_THRESHOLD: 2,           // Only send if moved more than 2 pixels
-            ROTATION_THRESHOLD: 0.05         // Only send if rotated more than 0.05 radians
-        };
-
+        this.gameMode = null;
+        this.selectedTeam = null;
+        
+        // Weapon switching system
+        this.weaponSwitchCooldown = 0;
+        this.scrollAccumulator = 0;
+        this.lastWeaponSwitchTime = 0;
+        this.currentWeaponIndex = 0;
+        this.weapons = ['empty_hands', 'klakin', 'shootgun', 'grinad'];
+        
+        // Game objects
+        this.players = {};
+        this.bullets = {};
+        this.grenades = {};
+        this.room = null;
+        this.player = null;
+        
+        // UI Elements
+        this.healthBarBackground = null;
+        this.healthBar = null;
+        this.gunBarBackground = null;
+        this.gunBar = null;
+        this.restartOverlay = null;
+        
+        // Game stats
+        this.currentHealth = 100;
+        this.currentHealthBarImage = 1;
+        
+        // Initialize input systems
+        this.initializeInputSystems();
+        
+        // Load game configuration
+        this.loadGameConfiguration();
+    }
+    
+    /**
+     * Initialize input key mappings
+     */
+    initializeInputSystems() {
+        // These will be properly set up in create()
+        this.moveKeys = null;
+        this.shootKey = null;
+        this.testDamageKey = null;
+        this.restartKey = null;
+    }
+    
+    /**
+     * Load configuration from window object
+     */
+    loadGameConfiguration() {
+        const config = window.gameConfig || {};
+        this.gameMode = config.gameMode || GAME_CONSTANTS.GAME_MODES.TEAM;
+        this.selectedTeam = config.selectedTeam || GAME_CONSTANTS.TEAMS.ORANGE;
+        
+        GameLogger.info(`Game initialized`, { 
+            mode: this.gameMode, 
+            team: this.selectedTeam 
+        });
+        
+        // Initialize weapon switching system
+        this.weaponSwitchCooldown = 0;
+        this.scrollAccumulator = 0;
+        this.lastWeaponSwitchTime = 0;
+        this.currentWeaponIndex = 0;
+        this.weapons = ['empty_hands', 'klakin', 'shootgun', 'grinad'];
+        
         // Network optimization variables
         this.lastNetworkSend = 0;
         this.lastPosition = { x: 0, y: 0, rotation: 0 };
@@ -134,7 +270,7 @@ export default class Game extends Phaser.Scene {
                 bulletCount: 1,       // Single shot
                 spread: 0.1,          // Small spread for accuracy
                 damage: 25,
-                bulletSpeed: 800,
+                bulletSpeed: 1500,
                 range: 1000
             },
             'shootgun': {
@@ -145,7 +281,7 @@ export default class Game extends Phaser.Scene {
                 bulletCount: 8,       // Multiple pellets
                 spread: 0.5,          // Wide spread
                 damage: 15,           // Lower per-pellet damage
-                bulletSpeed: 600,
+                bulletSpeed: 1000,
                 range: 400
             },
             'grinad': {
@@ -153,12 +289,12 @@ export default class Game extends Phaser.Scene {
                 canShoot: false,        // Changed to false - no shooting
                 canThrowGrenade: true,   // New property
                 name: 'Grenade Launcher',
-                fireRate: 2500,         // 2.5 second reload time
+                fireRate: 1500,         // 1.5 second reload time
                 bulletCount: 1,
                 spread: 0,
                 damage: 80,             // Reduced from 100 to 80 for better balance
-                bulletSpeed: 300,
-                range: 450,             // Reduced from 600 to 450 for more logical range
+                bulletSpeed: 500,
+                range: 500,             // Reduced from 600 to 450 for more logical range
                 explosive: true,
                 explosionRadius: 120    // Add explosion radius property
             },
@@ -177,9 +313,11 @@ export default class Game extends Phaser.Scene {
         this.isReloading = false;
         this.lastShotTime = 0;
         
-                // Team Selection Logic - Initialize team-specific sprites
+        // Team Selection Logic - Initialize team-specific sprites
         this.selectedTeam = (window.gameConfig && window.gameConfig.selectedTeam) || 'orange';
-        console.log(`🎮 Game initialized with team: ${this.selectedTeam}`);
+        this.gameMode = (window.gameConfig && window.gameConfig.gameMode) || 'team';
+        
+        console.log(`🎮 Game initialized with mode: ${this.gameMode}, team/color: ${this.selectedTeam}`);
         console.log('🔍 window.gameConfig:', window.gameConfig);
         
         // Team-specific sprite mapping
@@ -422,23 +560,51 @@ export default class Game extends Phaser.Scene {
     this.weaponOrder = ['empty_hands', 'shootgun', 'klakin', 'grinad'];
     this.currentWeaponIndex = 0; // Start with empty hands
     
-    // Add mouse wheel event listener
+    // Weapon switching control variables
+    this.lastWeaponSwitchTime = 0;
+    this.weaponSwitchCooldown = 150; // Minimum 150ms between switches
+    this.scrollAccumulator = 0; // Accumulate scroll events
+    this.scrollThreshold = 100; // Minimum scroll amount to trigger switch
+    
+    // Add mouse wheel event listener with controlled switching
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
         if (this.player) {
-            // Determine scroll direction
-            if (deltaY > 0) {
-                // Scroll down - next weapon
-                this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weaponOrder.length;
-            } else if (deltaY < 0) {
-                // Scroll up - previous weapon
-                this.currentWeaponIndex = (this.currentWeaponIndex - 1 + this.weaponOrder.length) % this.weaponOrder.length;
+            const currentTime = this.time.now;
+            
+            // Check if we're still in cooldown period
+            if (currentTime - this.lastWeaponSwitchTime < this.weaponSwitchCooldown) {
+                return; // Ignore rapid scroll events
             }
             
-            // Switch to the selected weapon
-            const newWeapon = this.weaponOrder[this.currentWeaponIndex];
-            this.changeSpriteTexture(newWeapon);
+            // Accumulate scroll delta
+            this.scrollAccumulator += deltaY;
             
-            console.log(`🖱️ Mouse wheel weapon switch: ${newWeapon} (index: ${this.currentWeaponIndex})`);
+            // Check if accumulated scroll exceeds threshold
+            if (Math.abs(this.scrollAccumulator) >= this.scrollThreshold) {
+                let weaponChanged = false;
+                
+                if (this.scrollAccumulator > 0) {
+                    // Scroll down - next weapon
+                    this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weaponOrder.length;
+                    weaponChanged = true;
+                } else if (this.scrollAccumulator < 0) {
+                    // Scroll up - previous weapon
+                    this.currentWeaponIndex = (this.currentWeaponIndex - 1 + this.weaponOrder.length) % this.weaponOrder.length;
+                    weaponChanged = true;
+                }
+                
+                if (weaponChanged) {
+                    // Switch to the selected weapon
+                    const newWeapon = this.weaponOrder[this.currentWeaponIndex];
+                    this.changeSpriteTexture(newWeapon);
+                    
+                    // Update timing and reset accumulator
+                    this.lastWeaponSwitchTime = currentTime;
+                    this.scrollAccumulator = 0;
+                    
+                    GameLogger.debug(`Weapon switched to: ${newWeapon}`);
+                }
+            }
         }
     });
 
@@ -508,7 +674,7 @@ export default class Game extends Phaser.Scene {
     // Scale the gun bar to the desired size ONLY ONCE
     this.gunBarSprite.setDisplaySize(this.GUN_BAR_CONFIG.width, this.GUN_BAR_CONFIG.height);
     
-    console.log(`Gun bar positioned at: X=${gunBarX}, Y=${gunBarY}, Screen: ${screenWidth}x${screenHeight}`);
+    // Position gun bar in bottom right corner
     
     // Initialize gun bar state
     this.currentGunBarImage = 1;
@@ -549,7 +715,7 @@ export default class Game extends Phaser.Scene {
                 this.lastShotTime = currentTime;
                 this.shot = true;
             } else if (!currentWeapon.canShoot && !currentWeapon.canThrowGrenade) {
-                console.log("Cannot shoot without a weapon!");
+                GameLogger.warn("Cannot shoot without a weapon!");
             }
         }
     }, this);
@@ -694,10 +860,19 @@ export default class Game extends Phaser.Scene {
 
     connect() {
         var self = this;
-        // Send team information when joining the room
-        console.log(`🎮 Connecting to server with team: ${this.selectedTeam}`);
-        this.room = client.join("outdoor", {
-            team: this.selectedTeam
+        // Send team and game mode information when joining the room
+        GameLogger.info(`Connecting to server`, { 
+            mode: this.gameMode, 
+            team: this.selectedTeam 
+        });
+        
+        // Join different room types based on game mode to completely separate them
+        const roomType = this.gameMode === 'ffa' ? 'ffa_mode' : 'team_mode';
+        GameLogger.info(`Joining room type: ${roomType}`);
+        
+        this.room = client.join(roomType, {
+            team: this.selectedTeam,
+            gameMode: this.gameMode
         });
 
 
@@ -733,8 +908,7 @@ export default class Game extends Phaser.Scene {
 
                 }
             });            this.room.state.players.onAdd = (player, sessionId) => {
-                console.log(`🎮 State: Player ${sessionId} added`);
-                console.log(`🎨 Player data:`, {
+                GameLogger.debug(`Player ${sessionId} added`, {
                     team: player.team,
                     currentSprite: player.currentSprite,
                     x: player.x,
@@ -818,13 +992,7 @@ export default class Game extends Phaser.Scene {
 
             this.room.state.bullets.onAdd = (bullet, sessionId) => {
                 // Create bullet sprite with configured properties
-                console.log(`🔫 Creating bullet with config:`, {
-                    width: self.BULLET_CONFIG.width,
-                    height: self.BULLET_CONFIG.height,
-                    scale: self.BULLET_CONFIG.scale,
-                    tint: `0x${self.BULLET_CONFIG.tint.toString(16)}`,
-                    alpha: self.BULLET_CONFIG.alpha
-                });
+                GameLogger.debug(`Creating bullet ${bullet.index}`);
                 
                 const bulletSprite = self.physics.add.sprite(bullet.x, bullet.y, 'bullet')
                     .setRotation(bullet.angle + self.BULLET_CONFIG.rotation);
@@ -843,7 +1011,7 @@ export default class Game extends Phaser.Scene {
                 
                 self.bullets[bullet.index] = bulletSprite;
                 
-                console.log(`🔫 Created bullet ${bullet.index} - Final size: ${bulletSprite.displayWidth}x${bulletSprite.displayHeight}`);
+                GameLogger.debug(`Created bullet ${bullet.index}`);
 
                 // If you want to track changes on a child object inside a map, this is a common pattern:
                 bullet.onChange = function (changes) {
@@ -863,19 +1031,16 @@ export default class Game extends Phaser.Scene {
             }
 
             this.room.state.grenades.onAdd = (grenade, sessionId) => {
-                console.log(`💣 Grenade state received:`, {
-                    index: grenade.index,
-                    startX: grenade.startX,
-                    startY: grenade.startY,
-                    targetX: grenade.targetX,
-                    targetY: grenade.targetY,
-                    startTime: grenade.startTime
+                GameLogger.debug(`Grenade state received`, { 
+                    grenadeIndex: grenade.index,
+                    start: `(${grenade.startX}, ${grenade.startY})`,
+                    target: `(${grenade.targetX}, ${grenade.targetY})`
                 });
                 self.createGrenadeFromServer(grenade);
             }
 
             this.room.state.grenades.onRemove = function (grenade, sessionId) {
-                console.log(`💥 Grenade ${grenade.index} exploded at (${grenade.targetX}, ${grenade.targetY})`);
+                GameLogger.debug(`Grenade ${grenade.index} exploded`);
                 // Create explosion effect at target location
                 if (self.grenades[grenade.index]) {
                     self.createExplosionEffect(grenade.targetX, grenade.targetY);
@@ -975,6 +1140,14 @@ export default class Game extends Phaser.Scene {
     }
 
     update() {
+        // Mouse wheel scroll accumulator decay - reset if no scrolling for a while
+        if (this.scrollAccumulator !== 0) {
+            const timeSinceLastSwitch = this.time.now - this.lastWeaponSwitchTime;
+            if (timeSinceLastSwitch > 500) { // Reset after 500ms of no switching
+                this.scrollAccumulator = 0;
+            }
+        }
+        
         // Performance monitoring
         this.updatePerformanceStats();
 
@@ -1199,7 +1372,7 @@ takeDamage(amount) {
 }
 
 handleDeath() {
-    console.log(`☠️  Player death - showing restart UI`);
+    GameLogger.info("Player death - showing restart UI");
     
     // Notify server that this player has died
     if (this.roomJoined && this.room) {
@@ -1224,13 +1397,14 @@ handleDeath() {
 }
 
 showRestartUI() {
-    console.log("💀 Showing restart UI with HTML styling");
-    console.log("🔍 Checking if restart UI already exists...");
+    GameLogger.debug("Showing restart UI");
+    
+    // Check if restart UI already exists
     
     // Remove existing overlay if it exists
     const existingOverlay = document.getElementById('restartOverlay');
     if (existingOverlay) {
-        console.log("⚠️ Removing existing restart overlay");
+        GameLogger.warn("Removing existing restart overlay");
         existingOverlay.remove();
     }
     
@@ -1320,7 +1494,7 @@ showRestartUI() {
     // Add click handler with proper context binding
     const self = this; // Store reference to game instance
     restartButton.addEventListener('click', () => {
-        console.log("🔄 Restart button clicked!");
+        GameLogger.info("Restart button clicked");
         self.restartGame();
     });
     
@@ -1428,9 +1602,10 @@ restartGame() {
         console.log("❌ Could not find overlay element with ID 'overlay'");
     }
     
-    // Hide login form and show team selection directly
-    console.log("🔍 Looking for login and team selection forms...");
+    // Hide login form and show game mode selection directly
+    console.log("🔍 Looking for login and game mode forms...");
     const loginForm = document.getElementById('loginForm');
+    const gameModeForm = document.getElementById('gameModeForm');
     const teamSelectionForm = document.getElementById('teamSelectionForm');
     
     if (loginForm) {
@@ -1441,17 +1616,22 @@ restartGame() {
     }
     
     if (teamSelectionForm) {
-        console.log("✅ Found teamSelectionForm, showing it");
-        teamSelectionForm.style.display = 'flex';
-    } else {
-        console.log("❌ Could not find teamSelectionForm element");
+        console.log("✅ Found teamSelectionForm, hiding it");
+        teamSelectionForm.style.display = 'none';
     }
     
-    // Reset any previous team selection if needed
-    window.gameConfig = window.gameConfig || {};
-    // Don't reset selectedTeam so user can keep their previous choice
+    if (gameModeForm) {
+        console.log("✅ Found gameModeForm, showing it");
+        gameModeForm.style.display = 'flex';
+    } else {
+        console.log("❌ Could not find gameModeForm element");
+    }
     
-    console.log("✅ Restart process completed - should be on team selection screen");
+    // Reset game config for fresh selection
+    window.gameConfig = window.gameConfig || {};
+    // Don't reset selectedTeam and gameMode so user can keep their previous choice if desired
+    
+    console.log("✅ Restart process completed - should be on game mode selection screen");
 }
 
 animateLowHealthWarning() {
@@ -1869,6 +2049,18 @@ stopLowHealthEffects() {
             // Get team-specific sprite key
             const teamSpriteKey = this.getTeamSpriteKey(spriteKey);
             this.player.sprite.setTexture(teamSpriteKey);
+            
+            // Add visual feedback for weapon switching - brief scale animation
+            if (this.player.sprite.scene) {
+                this.player.sprite.setScale(1.1);
+                this.tweens.add({
+                    targets: this.player.sprite,
+                    scaleX: 1.0,
+                    scaleY: 1.0,
+                    duration: 100,
+                    ease: 'Back.easeOut'
+                });
+            }
             
             const weapon = this.weaponConfig[spriteKey];
             

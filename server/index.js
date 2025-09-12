@@ -13,8 +13,9 @@ const app = express()
 const server = http.createServer(app);
 const gameServer = new colyseus.Server({ server });
 
-// register your room handlers
-gameServer.register('outdoor', outdoor);
+// register your room handlers - separate rooms for different game modes
+gameServer.register('team_mode', outdoor);
+gameServer.register('ffa_mode', outdoor);
 
 /* register @colyseus/social routes
 app.use("/", socialRoutes);*/

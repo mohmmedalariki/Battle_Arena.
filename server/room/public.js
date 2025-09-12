@@ -12,6 +12,7 @@ type("number")(Player.prototype, "rotation");
 type("string")(Player.prototype, "team"); // Add team information
 type("string")(Player.prototype, "currentSprite"); // Add current sprite/weapon state
 type("number")(Player.prototype, "health"); // Add health tracking
+type("string")(Player.prototype, "gameMode"); // Add game mode (team or ffa)
 
 class Bullet extends Schema {}
 type("number")(Bullet.prototype, "x");
@@ -98,11 +99,14 @@ class State extends Schema {
 
 
 
-    createPlayer(id, team = 'orange', position = null) {
+    createPlayer(id, team = 'orange', gameMode = 'team', position = null) {
         this.players[id] = new Player();
         this.players[id].team = team;
+        this.players[id].gameMode = gameMode;
         this.players[id].currentSprite = team === 'blue' ? 'blue_empty_hands' : 'empty_hands';
         this.players[id].health = 100; // Initialize with full health
+        
+        console.log(`👤 Created player ${id} with team: ${team}, gameMode: ${gameMode}`);
         
         // Set initial position if provided
         if (position) {
@@ -162,14 +166,15 @@ exports.outdoor = class extends colyseus.Room {
         
         let nextPosition = this.state.getNextPosition();
         let playerTeam = options.team || 'orange'; // Get team from client options
+        let gameMode = options.gameMode || 'team'; // Get game mode from client options
         
-        console.log(`🎯 Server: Creating player with team: ${playerTeam}`);
+        console.log(`🎯 Server: Creating player with team: ${playerTeam}, mode: ${gameMode}`);
         
         // Calculate spawn position based on player number
         let spawnX = 200 + (nextPosition * 100); // Spread players out
         let spawnY = 200 + (nextPosition * 50);
         
-        this.state.createPlayer(client.sessionId, playerTeam, {x: spawnX, y: spawnY});
+        this.state.createPlayer(client.sessionId, playerTeam, gameMode, {x: spawnX, y: spawnY});
         
         // Send spawn position only (state system handles player creation)
         this.send(client, {
@@ -220,6 +225,7 @@ exports.outdoor = class extends colyseus.Room {
 
             case "throw_grenade":
                 if (this.state.getPlayer(client.sessionId) == undefined) return;
+                
                 // Create grenade in state for all clients to see
                 let grenade = this.state.createGrenade(client.sessionId, message.data);
                 
@@ -250,24 +256,38 @@ exports.outdoor = class extends colyseus.Room {
     // Calculate grenade flight time based on distance
     calculateGrenadeFlightTime(startX, startY, targetX, targetY) {
         const distance = Math.sqrt(Math.pow(targetX - startX, 2) + Math.pow(targetY - startY, 2));
-        return Math.min(1000 + (distance / 2), 2000); // 1-2 seconds flight time
+        return Math.min(500 + (distance / 4), 1000); // Reduced to 0.5-1 seconds flight time for more self-damage risk
     }
 
     // Handle grenade explosions with area-of-effect damage
     handleGrenadeExplosion(shooterId, grenadeData) {
-        const explosionRadius = 120; // 120 pixels explosion radius (about 3-4 player widths)
+        const explosionRadius = 120; // Balanced explosion radius for gameplay
         const maxDamage = grenadeData.damage || 80; // Maximum damage at center
         const minDamage = 15; // Minimum damage at edge of explosion
         
-        console.log(`💥 Server: Grenade explosion at (${grenadeData.targetX}, ${grenadeData.targetY}) by ${shooterId}`);
+        console.log(`💥 Server: Grenade explosion at (${Math.round(grenadeData.targetX)}, ${Math.round(grenadeData.targetY)}) by ${shooterId}`);
         
         // Check damage to all players in explosion radius (including the thrower)
         for (let playerId in this.state.players) {
             let player = this.state.players[playerId];
-            let distance = Math.sqrt(
-                Math.pow(player.x - grenadeData.targetX, 2) + 
-                Math.pow(player.y - grenadeData.targetY, 2)
-            );
+            
+            let distance;
+            
+            // For self-damage, use distance from start position to explosion target
+            // For other players, use their current position to explosion target
+            if (playerId === shooterId) {
+                // Self-damage: distance from where the grenade was thrown to where it exploded
+                distance = Math.sqrt(
+                    Math.pow(grenadeData.startX - grenadeData.targetX, 2) + 
+                    Math.pow(grenadeData.startY - grenadeData.targetY, 2)
+                );
+            } else {
+                // Other players: distance from their current position to explosion
+                distance = Math.sqrt(
+                    Math.pow(player.x - grenadeData.targetX, 2) + 
+                    Math.pow(player.y - grenadeData.targetY, 2)
+                );
+            }
             
             // If player is within explosion radius
             if (distance <= explosionRadius) {
@@ -280,9 +300,9 @@ exports.outdoor = class extends colyseus.Room {
                 
                 // Log different messages for self-damage vs other players
                 if (playerId === shooterId) {
-                    console.log(`💥 Player ${playerId} hit by their own grenade: distance=${Math.round(distance)}, damage=${actualDamage}, health=${player.health}`);
+                    console.log(`💥 Player ${playerId} damaged by own grenade: -${actualDamage} HP (${player.health} remaining)`);
                 } else {
-                    console.log(`💥 Player ${playerId} hit by grenade from ${shooterId}: distance=${Math.round(distance)}, damage=${actualDamage}, health=${player.health}`);
+                    console.log(`💥 Player ${playerId} hit by grenade: -${actualDamage} HP (${player.health} remaining)`);
                 }
                 
                 // Send hit message for each affected player
@@ -300,6 +320,8 @@ exports.outdoor = class extends colyseus.Room {
                     console.log(`☠️  Server: Player ${playerId} killed by grenade, removing from game state`);
                     this.state.removePlayer(playerId);
                 }
+            } else {
+                console.log(`❌ Player ${playerId} outside explosion radius: distance=${Math.round(distance)} > ${explosionRadius}`);
             }
         }
     }
@@ -318,14 +340,26 @@ exports.outdoor = class extends colyseus.Room {
                     if (this.state.bullets[i].owner_id != id) {
                         //because your own bullet shouldn't hit you
                         
-                        // Optional: Add friendly fire prevention
-                        let shooterTeam = this.state.players[this.state.bullets[i].owner_id]?.team;
-                        let targetTeam = this.state.players[id]?.team;
+                        // Friendly fire prevention logic based on game mode
+                        let shooterPlayer = this.state.players[this.state.bullets[i].owner_id];
+                        let targetPlayer = this.state.players[id];
                         
-                        // Uncomment the next 3 lines to enable friendly fire prevention
-                        // if (shooterTeam && targetTeam && shooterTeam === targetTeam) {
-                        //     continue; // Skip friendly fire
-                        // }
+                        if (shooterPlayer && targetPlayer) {
+                            let shooterTeam = shooterPlayer.team;
+                            let targetTeam = targetPlayer.team;
+                            let shooterGameMode = shooterPlayer.gameMode;
+                            
+                            console.log(`🔫 Bullet collision check: shooter=${this.state.bullets[i].owner_id}(${shooterTeam},${shooterGameMode}) vs target=${id}(${targetTeam})`);
+                            
+                            // In team mode, prevent friendly fire (same team can't hurt each other)
+                            // In FFA mode, allow all damage (anyone can hurt anyone regardless of color)
+                            if (shooterGameMode === 'team' && shooterTeam === targetTeam) {
+                                console.log(`🛡️ Friendly fire prevented in team mode: ${shooterTeam} vs ${targetTeam}`);
+                                continue; // Skip friendly fire in team mode
+                            } else {
+                                console.log(`💥 Damage allowed: mode=${shooterGameMode}, teams=${shooterTeam} vs ${targetTeam}`);
+                            }
+                        }
                         
                         let dx = this.state.players[id].x - this.state.bullets[i].x;
                         let dy = this.state.players[id].y - this.state.bullets[i].y;

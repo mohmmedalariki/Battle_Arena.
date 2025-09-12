@@ -12,13 +12,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const overlay = document.getElementById("overlay");
   const guestBtn = document.querySelector('.guestBtn');
   const loginForm = document.getElementById("loginForm");
+  const gameModeForm = document.getElementById("gameModeForm");
   const teamSelectionForm = document.getElementById("teamSelectionForm");
+  const modeBtns = document.querySelectorAll('.mode-btn');
   const teamBtns = document.querySelectorAll('.team-btn');
 
   console.log("Overlay element:", overlay);
   console.log("Login button found:", loginBtn);
 
-  // Store selected team
+  // Store selected game mode and team/color
+  let selectedGameMode = null; // 'team' or 'ffa'
   let selectedTeam = null;
 
  loginBtn.addEventListener("click", async (event) => {
@@ -31,8 +34,8 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Logged in as:", user.displayName);
     console.log("User UID:", user.uid);
 
-    // Don't hide overlay yet, show team selection instead
-    showTeamSelection();
+    // Don't hide overlay yet, show game mode selection instead
+    showGameModeSelection();
 
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
@@ -68,13 +71,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   guestBtn?.addEventListener('click', () => {
-    // Show team selection for guest users too
-    showTeamSelection();
+    // Show game mode selection for guest users too
+    showGameModeSelection();
   });
 
-  // Function to show team selection menu
-  function showTeamSelection() {
+  // Function to show game mode selection menu
+  function showGameModeSelection() {
     loginForm.style.display = 'none';
+    gameModeForm.style.display = 'flex';
+  }
+
+  // Function to show team/color selection menu
+  function showTeamSelection() {
+    gameModeForm.style.display = 'none';
+    
+    // Update the team selection UI based on game mode
+    const titleElement = document.getElementById('teamSelectionTitle');
+    const orangeLabel = document.getElementById('orangeLabel');
+    const blueLabel = document.getElementById('blueLabel');
+    
+    if (selectedGameMode === 'ffa') {
+      titleElement.textContent = 'Choose Your Color';
+      orangeLabel.textContent = 'Orange';
+      blueLabel.textContent = 'Blue';
+    } else {
+      titleElement.textContent = 'Choose Your Team';
+      orangeLabel.textContent = 'Orange Team';
+      blueLabel.textContent = 'Blue Team';
+    }
+    
     teamSelectionForm.style.display = 'flex';
   }
 
@@ -82,10 +107,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function startGame() {
     overlay.style.display = 'none';
     document.body.focus();
-    console.log(`🎮 Starting game with team: ${selectedTeam}`);
+    console.log(`🎮 Starting game with mode: ${selectedGameMode}, team/color: ${selectedTeam}`);
     
-    // Store selected team globally so the game can access it
+    // Store selected game mode and team globally so the game can access it
     window.gameConfig = window.gameConfig || {};
+    window.gameConfig.gameMode = selectedGameMode;
     window.gameConfig.selectedTeam = selectedTeam;
     
     // NOW create the Phaser game AFTER team selection
@@ -113,11 +139,30 @@ document.addEventListener("DOMContentLoaded", () => {
     new Phaser.Game(config);
   }
 
-  // Team selection event listeners
+  // Game mode selection event listeners
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      selectedGameMode = e.target.dataset.mode;
+      console.log(`Game mode selected: ${selectedGameMode}`);
+      
+      // Add visual feedback
+      document.querySelectorAll('.mode-option').forEach(option => {
+        option.style.borderColor = '#444444';
+      });
+      e.target.closest('.mode-option').style.borderColor = '#99bb99';
+      
+      // Show team/color selection after mode selection
+      setTimeout(() => {
+        showTeamSelection();
+      }, 500);
+    });
+  });
+
+  // Team/Color selection event listeners
   teamBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
       selectedTeam = e.target.dataset.team;
-      console.log(`Team selected: ${selectedTeam}`);
+      console.log(`${selectedGameMode === 'ffa' ? 'Color' : 'Team'} selected: ${selectedTeam}`);
       
       // Add visual feedback
       document.querySelectorAll('.team-option').forEach(option => {
@@ -125,7 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       e.target.closest('.team-option').style.borderColor = '#99bb99';
       
-      // Start game after team selection
+      // Start game after team/color selection
       setTimeout(() => {
         startGame();
       }, 500);
