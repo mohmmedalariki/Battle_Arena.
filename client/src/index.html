@@ -22,6 +22,12 @@
       align-items: center;
       }
 
+      /* Game canvas cursor styling for cross-browser compatibility */
+      canvas {
+        margin: 0;
+        cursor: url('./assets/cursor.cur') 16 16, crosshair !important;
+      }
+
       #overlay {
   position: absolute;
   top: 0;
@@ -34,10 +40,6 @@
   pointer-events: none; 
   z-index: 10;
 }
-
-      canvas {
-        margin: 0;
-      }
 
     
   #loginForm {
@@ -107,6 +109,93 @@
 #loginForm button:last-child:hover {
   background-color: #99bb99;
   color: #0f0f0f;
+}
+
+/* Game Mode Selection Styles */
+#gameModeForm {
+  background-color: #1a1a1a;
+  padding: 30px;
+  border: 2px solid #99bb99;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 1000;
+  font-family: 'Silkscreen', sans-serif;
+  max-width: 700px;
+}
+
+#gameModeForm h2 {
+  color: #cceedd;
+  font-size: 24px;
+  text-align: center;
+  margin: 0 0 20px;
+}
+
+.mode-options {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+}
+
+.mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 25px;
+  border: 2px solid #444444;
+  border-radius: 15px;
+  background-color: #2a2a2a;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.mode-option:hover {
+  border-color: #99bb99;
+  background-color: #333333;
+  transform: translateY(-2px);
+}
+
+.mode-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.mode-option h3 {
+  color: #cceedd;
+  font-size: 18px;
+  margin: 0;
+  text-align: center;
+}
+
+.mode-option p {
+  color: #aaaaaa;
+  font-size: 12px;
+  margin: 0;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.mode-btn {
+  padding: 12px 24px;
+  border: 2px solid #99bb99;
+  border-radius: 8px;
+  background-color: transparent;
+  color: #cceedd;
+  font-family: 'Silkscreen', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+}
+
+.mode-btn:hover {
+  background-color: #99bb99;
+  color: #0f0f0f;
+  transform: scale(1.05);
 }
 
 /* Team Selection Styles */
@@ -213,18 +302,37 @@
       <button id="googleLoginBtn">Login with Google</button>
       <button class="guestBtn" type="button"> Login as guest </button>
     </div>
+<!-- Game Mode Selection Menu -->
+<div id="gameModeForm" style="display: none;">
+  <h2>Select Game Mode</h2>
+  <div class="mode-options">
+    <div class="mode-option" id="teamMode">
+      <div class="mode-icon">⚔️</div>
+      <h3>Team Mode</h3>
+      <p>Orange vs Blue Teams</p>
+      <button class="mode-btn" data-mode="team">Play Team Mode</button>
+    </div>
+    <div class="mode-option" id="ffaMode">
+      <div class="mode-icon">🔥</div>
+      <h3>Free-For-All</h3>
+      <p>Every Player for Themselves</p>
+      <button class="mode-btn" data-mode="ffa">Play Free-For-All</button>
+    </div>
+  </div>
+</div>
+
 <!-- Team Selection Menu -->
 <div id="teamSelectionForm" style="display: none;">
-  <h2>Choose Your Team</h2>
+  <h2 id="teamSelectionTitle">Choose Your Team</h2>
   <div class="team-options">
     <div class="team-option" id="orangeTeam">
       <img src="assets/Empty_hands.png" alt="Orange Team" class="team-image">
-      <h3>Orange Team</h3>
+      <h3 id="orangeLabel">Orange Team</h3>
       <button class="team-btn" data-team="orange">Select Orange</button>
     </div>
     <div class="team-option" id="blueTeam">
       <img src="assets/Blue_Empty_hands.png" alt="Blue Team" class="team-image">
-      <h3>Blue Team</h3>
+      <h3 id="blueLabel">Blue Team</h3>
       <button class="team-btn" data-team="blue">Select Blue</button>
     </div>
   </div>
