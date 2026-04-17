@@ -2,6 +2,7 @@ const webpack = require("webpack");
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const CleanWebpackPlugin = require("clean-webpack-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 module.exports = {
   mode: "development",
@@ -32,6 +33,16 @@ module.exports = {
     new CleanWebpackPlugin(["public"], {
       root: path.resolve(__dirname, "client/public")
     }),
+    new CopyWebpackPlugin([
+      {
+        from: './client/src/assets/Empty_hands.png',
+        to: './assets/Empty_hands.png'
+      },
+      {
+        from: './client/src/assets/Blue_Empty_hands.png',
+        to: './assets/Blue_Empty_hands.png'
+      }
+    ]),
     new webpack.DefinePlugin({
       CANVAS_RENDERER: JSON.stringify(true),
       WEBGL_RENDERER: JSON.stringify(true)

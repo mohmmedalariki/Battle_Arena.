@@ -1,4 +1,4 @@
-# Battle-arena
+# Battle-Arena
 Battle royale game for the real ones. Built with Phaser 3 and Colyseus, Battle arena - battefield honor is a survival game in its epiphany which brings players in unkown locations of a map together and force them to fight for thier survival. It came form the concept of popular games such as [Fortnite](https://fr.wikipedia.org/wiki/Fortnite) or [Pubg](https://fr.wikipedia.org/wiki/PlayerUnknown%27s_Battlegrounds) 
 
 ## Technical information
@@ -59,3 +59,6 @@ Three brightful minds namely:
  [Arnol Fokam](https://github.com/ArnolFokam/) - JS Ninja and cold blooded Game architect.  
  [Teddy Baha](https://github.com/Wil2129) - Firebase Samurai and Ace critical thinker.  
  [Alex Jordan](https://github.com/alexjordan05) - Graphics Sensei and Gamer in the Soul.  
+
+## Things added during internship:
+  

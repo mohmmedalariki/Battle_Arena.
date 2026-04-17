@@ -1,7 +1,8 @@
 {
-    "webpackDevPort": 8080,
+    "webpackDevPort": 3000,
     "serverDevPort": 2567,
     "herokuRemoteUrl": null,
     "herokuLocalPort": 5000,
     "herokuRemoteUrl": "battlefield-honor.herokuapp.com"
 }
+
