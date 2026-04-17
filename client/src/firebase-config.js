@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-
+#this is for testing
 const firebaseConfig = {
   apiKey: "AIzaSyCn1PWUTyQxTGS5ZkFS6I1Ax2Xtju6xTkQ",
   authDomain: "arena-b3a54.firebaseapp.com",
