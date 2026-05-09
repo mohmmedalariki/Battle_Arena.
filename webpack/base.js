@@ -34,13 +34,32 @@ module.exports = {
       root: path.resolve(__dirname, "client/public")
     }),
     new CopyWebpackPlugin([
+      // Original assets
       {
         from: './client/src/assets/Empty_hands.png',
         to: './assets/Empty_hands.png'
       },
+      // Blue team assets (added during development)
       {
         from: './client/src/assets/Blue_Empty_hands.png',
         to: './assets/Blue_Empty_hands.png'
+      },
+      {
+        from: './client/src/assets/Blue_Klakin.png',
+        to: './assets/Blue_Klakin.png'
+      },
+      {
+        from: './client/src/assets/Blue_ShootGun.png',
+        to: './assets/Blue_ShootGun.png'
+      },
+      {
+        from: './client/src/assets/Blue_Grinad.png',
+        to: './assets/Blue_Grinad.png'
+      },
+      // Copy all assets directory (fallback for any missed assets)
+      {
+        from: './client/src/assets',
+        to: './assets'
       }
     ]),
     new webpack.DefinePlugin({

@@ -1,22 +1,28 @@
-"use-strict"
+"use strict";
 
 import Phaser from "phaser";
-import emptyHandsImage from "./../assets/Empty_hands.png"
-import klakinImage from "./../assets/Klakin.png"
-import shootGunImage from "./../assets/ShootGun.png"
-import grinadImage from "./../assets/Grinad.png"
-import noGrinadImage from "./../assets/No_grinad.png"
-import blueEmptyHandsImage from "./../assets/Blue_Empty_hands.png"
-import blueKlakinImage from "./../assets/Blue_Klakin.png"
-import blueShootGunImage from "./../assets/Blue_ShootGun.png"
-import blueGrinadImage from "./../assets/Blue_Grinad.png"
-import theGrinadImage from "./../assets/The_grinad.png"
-import explosion1Image from "./../assets/Explosion1.png"  
-import explosion2Image from "./../assets/Explosion2.png"  
-import explosion3Image from "./../assets/Explosion3.png"  
-import explosion4Image from "./../assets/Explosion4.png"  
-import explosion5Image from "./../assets/Explosion5.png"  
-import explosion6Image from "./../assets/Explosion6.png"  
+
+// Asset imports
+import emptyHandsImage from "./../assets/Empty_hands.png";
+import klakinImage from "./../assets/Klakin.png";
+import shootGunImage from "./../assets/ShootGun.png";
+import grinadImage from "./../assets/Grinad.png";
+import noGrinadImage from "./../assets/No_grinad.png";
+import blueEmptyHandsImage from "./../assets/Blue_Empty_hands.png";
+import blueKlakinImage from "./../assets/Blue_Klakin.png";
+import blueShootGunImage from "./../assets/Blue_ShootGun.png";
+import blueGrinadImage from "./../assets/Blue_Grinad.png";
+import theGrinadImage from "./../assets/The_grinad.png";
+
+// Explosion effects
+import explosion1Image from "./../assets/Explosion1.png";  
+import explosion2Image from "./../assets/Explosion2.png";  
+import explosion3Image from "./../assets/Explosion3.png";  
+import explosion4Image from "./../assets/Explosion4.png";  
+import explosion5Image from "./../assets/Explosion5.png";  
+import explosion6Image from "./../assets/Explosion6.png";  
+
+// UI Elements
 import healthBar1Image from "./../assets/HealthBar1.png";
 import healthBar2Image from "./../assets/HealthBar2.png";
 import healthBar3Image from "./../assets/HealthBar3.png";
@@ -26,59 +32,215 @@ import gunBar1Image from "./../assets/GunBar1.png";
 import gunBar2Image from "./../assets/GunBar2.png";
 import gunBar3Image from "./../assets/GunBar3.png";
 import gunBar4Image from "./../assets/GunBar4.png";
+
+// Map assets
 import outdoor from "./../assets/tilemaps/battle-royale1.json";
 import outdoorImage from "./../assets/tilemaps/battle-royale.png";
+
+// Game objects
 import bulletImage from "./../assets/bullet.png";
 import cursorImage from "./../assets/cursor.cur";
+
+// Audio assets
 import bulletSound from "./../assets/sound/bulletSound.mp3";
 import backgroundMusic1 from "./../assets/sound/backgroundMusic1.mp3";
 import backgroundMusic2 from "./../assets/sound/backgroundMusic2.mp3";
+
+// Multiplayer
 import * as Colyseus from "colyseus.js";
 
-var gameConfig = require('./../../config.json');
+const gameConfig = require('./../../config.json');
 
-const endpoint = (window.location.hostname === "localhost") 
-    ? `ws://localhost:${gameConfig.serverDevPort}` 
-    : `${window.location.protocol.replace("http", "ws")}//${window.location.hostname}:${gameConfig.serverDevPort}`;
+/**
+ * Game Configuration and Constants
+ */
+const GAME_CONSTANTS = {
+    SERVER: {
+        DEV_PORT: gameConfig.serverDevPort,
+        ENDPOINT: (window.location.hostname === "localhost") 
+            ? `ws://localhost:${gameConfig.serverDevPort}` 
+            : `${window.location.protocol.replace("http", "ws")}//${window.location.hostname}:${gameConfig.serverDevPort}`
+    },
+    
+    HEALTH_BAR: {
+        width: 200,
+        height: 50,
+        x: 20,
+        y: 20,
+        borderRadius: 8,
+        borderThickness: 2,
+        animationDuration: 400,
+        damageFlashDuration: 100
+    },
+    
+    ENEMY_HEALTH_BAR: {
+        width: 60,
+        height: 8,
+        offsetY: -40,
+        backgroundColor: 0x000000,
+        borderColor: 0xffffff,
+        healthColor: 0x00ff00,
+        damageColor: 0xff0000,
+        borderThickness: 1
+    },
+    
+    GUN_BAR: {
+        width: 260,
+        height: 80,
+        offsetX: 20,
+        offsetY: 20
+    },
+    
+    BULLET: {
+        width: 30,
+        height: 20,
+        scale: 1.0,
+        rotation: Math.PI/2,
+        tint: 0xffffff,
+        alpha: 1.0,
+        depth: 10,
+        trail: false,
+        trailLength: 5
+    },
+    
+    PERFORMANCE: {
+        INTERPOLATION_RATE: 0.15,
+        MAX_INTERPOLATION_DISTANCE: 100,
+        REDUCED_INTERPOLATION_RATE: 0.05
+    },
+    
+    WEAPON_SWITCHING: {
+        COOLDOWN_MS: 200,
+        SCROLL_THRESHOLD: 1.0,
+        ACCUMULATOR_DECAY: 0.95
+    },
+    
+    GAME_MODES: {
+        TEAM: 'team',
+        FFA: 'ffa'
+    },
+    
+    TEAMS: {
+        BLUE: 'blue',
+        ORANGE: 'orange'
+    }
+};
 
 // Create the Colyseus client instance
-const client = new Colyseus.Client(endpoint);
+const client = new Colyseus.Client(GAME_CONSTANTS.SERVER.ENDPOINT);
 
+/**
+ * Professional Logger System
+ */
+class GameLogger {
+    static logLevel = 'INFO'; // 'DEBUG', 'INFO', 'WARN', 'ERROR'
+    
+    static debug(message, data = null) {
+        if (this.logLevel === 'DEBUG') {
+            console.log(`🔍 [DEBUG] ${message}`, data || '');
+        }
+    }
+    
+    static info(message, data = null) {
+        if (['DEBUG', 'INFO'].includes(this.logLevel)) {
+            console.log(`ℹ️ [INFO] ${message}`, data || '');
+        }
+    }
+    
+    static warn(message, data = null) {
+        if (['DEBUG', 'INFO', 'WARN'].includes(this.logLevel)) {
+            console.warn(`⚠️ [WARN] ${message}`, data || '');
+        }
+    }
+    
+    static error(message, data = null) {
+        console.error(`❌ [ERROR] ${message}`, data || '');
+    }
+}
+
+/**
+ * Main Game Scene for Battle Arena
+ * Handles multiplayer gameplay, weapon systems, and UI
+ */
 export default class Game extends Phaser.Scene {
     constructor() {
         super("Game");
-        // Add health bar config constants - positioned in top left corner
-        this.HEALTH_BAR_CONFIG = {
-            width: 200,
-            height: 50,
-            x: 20,
-            y: 20,
-            borderRadius: 8,
-            borderThickness: 2,
-            animationDuration: 400,
-            damageFlashDuration: 100
-        };
         
-        // Gun bar config constants - positioned in bottom right corner
-        this.GUN_BAR_CONFIG = {
-            width: 260,
-            height: 80,
-            offsetX: 20,  // Distance from right edge
-            offsetY: 20   // Distance from bottom edge
-        };
+        // Initialize configuration constants
+        this.HEALTH_BAR_CONFIG = GAME_CONSTANTS.HEALTH_BAR;
+        this.ENEMY_HEALTH_BAR_CONFIG = GAME_CONSTANTS.ENEMY_HEALTH_BAR;
+        this.GUN_BAR_CONFIG = GAME_CONSTANTS.GUN_BAR;
+        this.BULLET_CONFIG = GAME_CONSTANTS.BULLET;
+        this.PERFORMANCE_CONFIG = GAME_CONSTANTS.PERFORMANCE;
         
-        // Add current sprite tracker
+        // Game state
         this.currentSpriteKey = 'empty_hands';
-
-        // Performance Optimizations
-        this.PERFORMANCE_CONFIG = {
-            NETWORK_SEND_RATE: 60,           // Send updates 60 times per second max
-            INTERPOLATION_RATE: 0.15,        // Smooth interpolation
-            OBJECT_POOL_SIZE: 50,            // Pre-allocate objects
-            POSITION_THRESHOLD: 2,           // Only send if moved more than 2 pixels
-            ROTATION_THRESHOLD: 0.05         // Only send if rotated more than 0.05 radians
-        };
-
+        this.gameMode = null;
+        this.selectedTeam = null;
+        
+        // Weapon switching system
+        this.weaponSwitchCooldown = 0;
+        this.scrollAccumulator = 0;
+        this.lastWeaponSwitchTime = 0;
+        this.currentWeaponIndex = 0;
+        this.weapons = ['empty_hands', 'klakin', 'shootgun', 'grinad'];
+        
+        // Game objects
+        this.players = {};
+        this.bullets = {};
+        this.grenades = {};
+        this.room = null;
+        this.player = null;
+        
+        // UI Elements
+        this.healthBarBackground = null;
+        this.healthBar = null;
+        this.gunBarBackground = null;
+        this.gunBar = null;
+        this.restartOverlay = null;
+        
+        // Game stats
+        this.currentHealth = 100;
+        this.currentHealthBarImage = 1;
+        
+        // Initialize input systems
+        this.initializeInputSystems();
+        
+        // Load game configuration
+        this.loadGameConfiguration();
+    }
+    
+    /**
+     * Initialize input key mappings
+     */
+    initializeInputSystems() {
+        // These will be properly set up in create()
+        this.moveKeys = null;
+        this.shootKey = null;
+        this.testDamageKey = null;
+        this.restartKey = null;
+    }
+    
+    /**
+     * Load configuration from window object
+     */
+    loadGameConfiguration() {
+        const config = window.gameConfig || {};
+        this.gameMode = config.gameMode || GAME_CONSTANTS.GAME_MODES.TEAM;
+        this.selectedTeam = config.selectedTeam || GAME_CONSTANTS.TEAMS.ORANGE;
+        
+        GameLogger.info(`Game initialized`, { 
+            mode: this.gameMode, 
+            team: this.selectedTeam 
+        });
+        
+        // Initialize weapon switching system
+        this.weaponSwitchCooldown = 0;
+        this.scrollAccumulator = 0;
+        this.lastWeaponSwitchTime = 0;
+        this.currentWeaponIndex = 0;
+        this.weapons = ['empty_hands', 'klakin', 'shootgun', 'grinad'];
+        
         // Network optimization variables
         this.lastNetworkSend = 0;
         this.lastPosition = { x: 0, y: 0, rotation: 0 };
@@ -108,7 +270,7 @@ export default class Game extends Phaser.Scene {
                 bulletCount: 1,       // Single shot
                 spread: 0.1,          // Small spread for accuracy
                 damage: 25,
-                bulletSpeed: 800,
+                bulletSpeed: 1500,
                 range: 1000
             },
             'shootgun': {
@@ -119,7 +281,7 @@ export default class Game extends Phaser.Scene {
                 bulletCount: 8,       // Multiple pellets
                 spread: 0.5,          // Wide spread
                 damage: 15,           // Lower per-pellet damage
-                bulletSpeed: 600,
+                bulletSpeed: 1000,
                 range: 400
             },
             'grinad': {
@@ -127,13 +289,14 @@ export default class Game extends Phaser.Scene {
                 canShoot: false,        // Changed to false - no shooting
                 canThrowGrenade: true,   // New property
                 name: 'Grenade Launcher',
-                fireRate: 2000,         // 2 second reload time
+                fireRate: 1500,         // 1.5 second reload time
                 bulletCount: 1,
                 spread: 0,
-                damage: 100,            // High explosive damage
-                bulletSpeed: 300,
-                range: 600,             // Reasonable grenade throw range
-                explosive: true
+                damage: 80,             // Reduced from 100 to 80 for better balance
+                bulletSpeed: 500,
+                range: 500,             // Reduced from 600 to 450 for more logical range
+                explosive: true,
+                explosionRadius: 120    // Add explosion radius property
             },
             'no_grinad': {
                 speed: 320, // New configuration for no_grinad sprite
@@ -150,9 +313,11 @@ export default class Game extends Phaser.Scene {
         this.isReloading = false;
         this.lastShotTime = 0;
         
-                // Team Selection Logic - Initialize team-specific sprites
+        // Team Selection Logic - Initialize team-specific sprites
         this.selectedTeam = (window.gameConfig && window.gameConfig.selectedTeam) || 'orange';
-        console.log(`🎮 Game initialized with team: ${this.selectedTeam}`);
+        this.gameMode = (window.gameConfig && window.gameConfig.gameMode) || 'team';
+        
+        console.log(`🎮 Game initialized with mode: ${this.gameMode}, team/color: ${this.selectedTeam}`);
         console.log('🔍 window.gameConfig:', window.gameConfig);
         
         // Team-specific sprite mapping
@@ -236,6 +401,7 @@ export default class Game extends Phaser.Scene {
         this.players = {};
         this.player = null;
         this.bullets = {};
+        this.grenades = {};
         this.map;
         this.bulletSound = null;
         this.backgroundMusic = null;
@@ -351,7 +517,9 @@ export default class Game extends Phaser.Scene {
     this.bulletSound = this.sound.add('bulletSound');
 
     // --- Cursor & Map ---
-    this.input.setDefaultCursor(`url('${cursorImage}'), crosshair`);
+    // Use CSS cursor for better cross-browser compatibility
+    this.game.canvas.style.cursor = `url('assets/cursor.cur') 16 16, crosshair`;
+    
     this.map = this.make.tilemap({ key: "map" });
 
     const tileset = this.map.addTilesetImage("battle-royale", "tiles");
@@ -392,35 +560,75 @@ export default class Game extends Phaser.Scene {
     this.weaponOrder = ['empty_hands', 'shootgun', 'klakin', 'grinad'];
     this.currentWeaponIndex = 0; // Start with empty hands
     
-    // Add mouse wheel event listener
+    // Weapon switching control variables
+    this.lastWeaponSwitchTime = 0;
+    this.weaponSwitchCooldown = 150; // Minimum 150ms between switches
+    this.scrollAccumulator = 0; // Accumulate scroll events
+    this.scrollThreshold = 100; // Minimum scroll amount to trigger switch
+    
+    // Add mouse wheel event listener with controlled switching
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
         if (this.player) {
-            // Determine scroll direction
-            if (deltaY > 0) {
-                // Scroll down - next weapon
-                this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weaponOrder.length;
-            } else if (deltaY < 0) {
-                // Scroll up - previous weapon
-                this.currentWeaponIndex = (this.currentWeaponIndex - 1 + this.weaponOrder.length) % this.weaponOrder.length;
+            const currentTime = this.time.now;
+            
+            // Check if we're still in cooldown period
+            if (currentTime - this.lastWeaponSwitchTime < this.weaponSwitchCooldown) {
+                return; // Ignore rapid scroll events
             }
             
-            // Switch to the selected weapon
-            const newWeapon = this.weaponOrder[this.currentWeaponIndex];
-            this.changeSpriteTexture(newWeapon);
+            // Accumulate scroll delta
+            this.scrollAccumulator += deltaY;
             
-            console.log(`🖱️ Mouse wheel weapon switch: ${newWeapon} (index: ${this.currentWeaponIndex})`);
+            // Check if accumulated scroll exceeds threshold
+            if (Math.abs(this.scrollAccumulator) >= this.scrollThreshold) {
+                let weaponChanged = false;
+                
+                if (this.scrollAccumulator > 0) {
+                    // Scroll down - next weapon
+                    this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weaponOrder.length;
+                    weaponChanged = true;
+                } else if (this.scrollAccumulator < 0) {
+                    // Scroll up - previous weapon
+                    this.currentWeaponIndex = (this.currentWeaponIndex - 1 + this.weaponOrder.length) % this.weaponOrder.length;
+                    weaponChanged = true;
+                }
+                
+                if (weaponChanged) {
+                    // Switch to the selected weapon
+                    const newWeapon = this.weaponOrder[this.currentWeaponIndex];
+                    this.changeSpriteTexture(newWeapon);
+                    
+                    // Update timing and reset accumulator
+                    this.lastWeaponSwitchTime = currentTime;
+                    this.scrollAccumulator = 0;
+                    
+                    GameLogger.debug(`Weapon switched to: ${newWeapon}`);
+                }
+            }
         }
     });
 
     // =============================
     // 🎯 Performance Monitoring & FPS Counter
     // =============================
-    this.fpsText = this.add.text(this.cameras.main.width - 120, 10, 'FPS: 60', {
-        font: '16px monospace',
+    this.fpsText = this.add.text(10, 10, 'FPS: 60', {
+        font: 'bold 14px Arial, sans-serif',
         fill: '#00ff00',
-        backgroundColor: '#000000',
-        padding: { x: 8, y: 4 }
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: { x: 10, y: 6 },
+        stroke: '#000000',
+        strokeThickness: 2
     }).setScrollFactor(0).setDepth(1000);
+    
+    // Position FPS counter in top-right for Chrome compatibility
+    this.fpsText.setPosition(this.cameras.main.width - this.fpsText.width - 10, 10);
+    
+    // Add window resize handler for FPS counter repositioning
+    this.scale.on('resize', (gameSize, baseSize, displaySize, resolution) => {
+        if (this.fpsText) {
+            this.fpsText.setPosition(gameSize.width - this.fpsText.width - 10, 10);
+        }
+    });
 
     // =============================
     // �🎮 Image-based Health Bar System
@@ -466,7 +674,7 @@ export default class Game extends Phaser.Scene {
     // Scale the gun bar to the desired size ONLY ONCE
     this.gunBarSprite.setDisplaySize(this.GUN_BAR_CONFIG.width, this.GUN_BAR_CONFIG.height);
     
-    console.log(`Gun bar positioned at: X=${gunBarX}, Y=${gunBarY}, Screen: ${screenWidth}x${screenHeight}`);
+    // Position gun bar in bottom right corner
     
     // Initialize gun bar state
     this.currentGunBarImage = 1;
@@ -507,7 +715,7 @@ export default class Game extends Phaser.Scene {
                 this.lastShotTime = currentTime;
                 this.shot = true;
             } else if (!currentWeapon.canShoot && !currentWeapon.canThrowGrenade) {
-                console.log("Cannot shoot without a weapon!");
+                GameLogger.warn("Cannot shoot without a weapon!");
             }
         }
     }, this);
@@ -619,42 +827,78 @@ export default class Game extends Phaser.Scene {
             this.performanceStats.frameCount = 0;
             this.performanceStats.lastTime = now;
             
-            // Update FPS display
-            let color = '#00ff00'; // Green
-            if (this.performanceStats.fps < 30) color = '#ff0000'; // Red
-            else if (this.performanceStats.fps < 45) color = '#ffff00'; // Yellow
+            // Update FPS display with color coding
+            let color = '#00ff00'; // Green for good FPS (45+)
+            let bgColor = 'rgba(0, 50, 0, 0.8)'; // Dark green background
             
-            this.fpsText.setText(`FPS: ${this.performanceStats.fps}`)
-                       .setColor(color);
+            if (this.performanceStats.fps < 30) {
+                color = '#ff4444'; // Red for poor FPS
+                bgColor = 'rgba(50, 0, 0, 0.8)'; // Dark red background
+            } else if (this.performanceStats.fps < 45) {
+                color = '#ffdd44'; // Yellow for medium FPS
+                bgColor = 'rgba(50, 50, 0, 0.8)'; // Dark yellow background
+            }
             
-            // Memory usage (if available)
+            // Create display text
+            let displayText = `FPS: ${this.performanceStats.fps}`;
+            
+            // Add memory usage if available (Chrome supports this)
             if (performance.memory) {
                 const memMB = Math.round(performance.memory.usedJSHeapSize / 1048576);
-                this.fpsText.setText(`FPS: ${this.performanceStats.fps} | MEM: ${memMB}MB`);
+                displayText += ` | RAM: ${memMB}MB`;
             }
+            
+            // Update text and styling
+            this.fpsText.setText(displayText)
+                       .setColor(color)
+                       .setStyle({ backgroundColor: bgColor });
+            
+            // Reposition to ensure it stays in the top-right corner
+            this.fpsText.setPosition(this.cameras.main.width - this.fpsText.width - 10, 10);
         }
     }
 
     connect() {
         var self = this;
-        this.room = client.join("outdoor", {});
+        // Send team and game mode information when joining the room
+        GameLogger.info(`Connecting to server`, { 
+            mode: this.gameMode, 
+            team: this.selectedTeam 
+        });
+        
+        // Join different room types based on game mode to completely separate them
+        const roomType = this.gameMode === 'ffa' ? 'ffa_mode' : 'team_mode';
+        GameLogger.info(`Joining room type: ${roomType}`);
+        
+        this.room = client.join(roomType, {
+            team: this.selectedTeam,
+            gameMode: this.gameMode
+        });
 
 
-        this.room.onJoin.add(() => {
+            this.room.onJoin.add(() => {
 
             self.roomJoined = true;
 
             this.room.onStateChange.addOnce((state) => {
+                console.log('🎮 Initial state received:', {
+                    players: Object.keys(state.players).length,
+                    bullets: Object.keys(state.bullets).length,
+                    grenades: Object.keys(state.grenades || {}).length
+                });
+                
                 // Loop over all the player data received
                 for (let id in state.players) {
                     // If the player hasn't been created yet
                     if (self.players[id] == undefined && id != this.room.sessionId) { // Make sure you don't create yourself
                         let data = state.players[id];
+                        console.log(`🎮 Creating player from initial state: ${id}`, data);
                         self.addPlayer({
                             id: id,
                             x: data.x,
                             y: data.y,
-                            rotation: data.rotation || 0
+                            rotation: data.rotation || 0,
+                            team: data.team || 'orange' // Include team data
                         });
                         let player_sprite = self.players[id].sprite;
                         player_sprite.target_x = state.players[id].x; // Update target, not actual position, so we can interpolate
@@ -663,29 +907,111 @@ export default class Game extends Phaser.Scene {
                     }
 
                 }
-            });
-
-            this.room.state.players.onAdd = (player, sessionId) => {
-                //to prevent the player from recieving a message when he is the new player added
+            });            this.room.state.players.onAdd = (player, sessionId) => {
+                GameLogger.debug(`Player ${sessionId} added`, {
+                    team: player.team,
+                    currentSprite: player.currentSprite,
+                    x: player.x,
+                    y: player.y
+                });
+                
+                // Create the visual sprite for this player if it doesn't exist
+                if (!self.players[sessionId]) {
+                    // Get spawn position (use a default if no specific position)
+                    let spawnX = player.x || 400;
+                    let spawnY = player.y || 300;
+                    
+                    // Determine the correct sprite based on player's team
+                    let spriteKey;
+                    if (player.team === 'blue') {
+                        spriteKey = player.currentSprite || 'blue_empty_hands';
+                        console.log(`🔵 Blue team player: ${spriteKey}`);
+                    } else {
+                        spriteKey = player.currentSprite || 'empty_hands';
+                        console.log(`🟠 Orange team player: ${spriteKey}`);
+                    }
+                    
+                    console.log(`🎨 Creating player ${sessionId} with sprite: ${spriteKey}`);
+                    
+                    // Create the visual sprite
+                    let sprite = self.physics.add.sprite(spawnX, spawnY, spriteKey).setSize(120, 165);
+                    
+                    // Store player reference
+                    self.players[sessionId] = {};
+                    self.players[sessionId].sprite = sprite;
+                    self.players[sessionId].team = player.team;
+                    
+                    // If this is the current player, set up camera and controls
+                    if (sessionId == self.room.sessionId) {
+                        self.player = self.players[sessionId];
+                        self.player.sprite.setCollideWorldBounds(true);
+                        self.cameras.main.startFollow(self.player.sprite);
+                        self.cameras.main.setLerp(0.1, 0.1);
+                    } else {
+                        // THIS IS AN ENEMY PLAYER - CREATE HEALTH BAR!
+                        sprite.setTint("0xff0000"); // Red tint for enemies
+                        console.log(`🏥 CREATING HEALTH BAR for new enemy ${sessionId}`);
+                        self.createEnemyHealthBar(sessionId, sprite);
+                        console.log(`🎮 Enemy player ${sessionId} added with health bar via onAdd`);
+                    }
+                }
+                
+                // Set up change handler for this player
                 if (sessionId != this.room.sessionId) {
-                    // If you want to track changes on a child object inside a map, this is a common pattern:
                     player.onChange = function (changes) {
                         changes.forEach(change => {
                             if (change.field == "rotation") {
-                                self.players[sessionId].sprite.target_rotation = change.value;
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.target_rotation = change.value;
+                                }
                             } else if (change.field == "x") {
-                                self.players[sessionId].sprite.target_x = change.value;
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.target_x = change.value;
+                                }
                             } else if (change.field == "y") {
-                                self.players[sessionId].sprite.target_y = change.value;
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.target_y = change.value;
+                                }
+                            } else if (change.field == "currentSprite") {
+                                // Handle sprite changes from server state
+                                if (self.players[sessionId] && self.players[sessionId].sprite) {
+                                    self.players[sessionId].sprite.setTexture(change.value);
+                                    console.log(`🎨 State change: Player ${sessionId} sprite → ${change.value}`);
+                                }
+                            } else if (change.field == "health") {
+                                // Handle health changes for enemy players
+                                if (self.players[sessionId] && self.players[sessionId].healthBar) {
+                                    self.updateEnemyHealthBar(sessionId, change.value);
+                                    console.log(`❤️ Player ${sessionId} health → ${change.value}`);
+                                }
                             }
                         });
                     };
-
                 }
             }
 
             this.room.state.bullets.onAdd = (bullet, sessionId) => {
-                self.bullets[bullet.index] = self.physics.add.sprite(bullet.x, bullet.y, 'bullet').setRotation(bullet.angle);
+                // Create bullet sprite with configured properties
+                GameLogger.debug(`Creating bullet ${bullet.index}`);
+                
+                const bulletSprite = self.physics.add.sprite(bullet.x, bullet.y, 'bullet')
+                    .setRotation(bullet.angle + self.BULLET_CONFIG.rotation);
+                
+                // Set size using displaySize first, then apply scale multiplier
+                bulletSprite.setDisplaySize(self.BULLET_CONFIG.width, self.BULLET_CONFIG.height);
+                if (self.BULLET_CONFIG.scale !== 1.0) {
+                    bulletSprite.setScale(bulletSprite.scaleX * self.BULLET_CONFIG.scale, 
+                                         bulletSprite.scaleY * self.BULLET_CONFIG.scale);
+                }
+                
+                bulletSprite
+                    .setTint(self.BULLET_CONFIG.tint)
+                    .setAlpha(self.BULLET_CONFIG.alpha)
+                    .setDepth(self.BULLET_CONFIG.depth);
+                
+                self.bullets[bullet.index] = bulletSprite;
+                
+                GameLogger.debug(`Created bullet ${bullet.index}`);
 
                 // If you want to track changes on a child object inside a map, this is a common pattern:
                 bullet.onChange = function (changes) {
@@ -704,12 +1030,44 @@ export default class Game extends Phaser.Scene {
                 self.removeBullet(bullet.index);
             }
 
+            this.room.state.grenades.onAdd = (grenade, sessionId) => {
+                GameLogger.debug(`Grenade state received`, { 
+                    grenadeIndex: grenade.index,
+                    start: `(${grenade.startX}, ${grenade.startY})`,
+                    target: `(${grenade.targetX}, ${grenade.targetY})`
+                });
+                self.createGrenadeFromServer(grenade);
+            }
+
+            this.room.state.grenades.onRemove = function (grenade, sessionId) {
+                GameLogger.debug(`Grenade ${grenade.index} exploded`);
+                // Create explosion effect at target location
+                if (self.grenades[grenade.index]) {
+                    self.createExplosionEffect(grenade.targetX, grenade.targetY);
+                    // Clean up grenade sprite
+                    if (self.grenades[grenade.index].sprite) {
+                        self.grenades[grenade.index].sprite.destroy();
+                    }
+                    delete self.grenades[grenade.index];
+                } else {
+                    // Even if we don't have the grenade sprite, still show explosion
+                    self.createExplosionEffect(grenade.targetX, grenade.targetY);
+                }
+            }
+
 
 
             this.room.state.players.onRemove = function (player, sessionId) {
-                //if the player removed (maybe killed) is not this player
+                console.log(`🗑️  Player ${sessionId} removed from server state`);
+                
+                // Remove the player visually for everyone (including if it's the current player who died)
                 if (sessionId !== self.room.sessionId) {
+                    // Remove other players
                     self.removePlayer(sessionId);
+                } else {
+                    // Current player died - show restart UI
+                    console.log(`☠️  Current player removed from server - triggering death handler`);
+                    self.handleDeath();
                 }
             }
         });
@@ -725,50 +1083,71 @@ export default class Game extends Phaser.Scene {
                     action: "initial_position",
                     data: position
                 });
-                self.addPlayer({
-                    id: this.room.sessionId,
-                    x: spawnPoint.x,
-                    y: spawnPoint.y
-                });
+                // Player creation is now handled by state system, not messages
+                // self.addPlayer({
+                //     id: this.room.sessionId,
+                //     x: spawnPoint.x,
+                //     y: spawnPoint.y
+                // });
             } else if (message.event == "new_player") {
-                let spawnPoint = this.map.findObject("player", obj => obj.name === `player${message.position}`);
-                let p = self.addPlayer({
-                    x: spawnPoint.x,
-                    y: spawnPoint.y,
-                    id: message.id,
-                    rotation: message.rotation || 0
-                });
+                // Player creation is now handled by state system, not messages
+                // let spawnPoint = this.map.findObject("player", obj => obj.name === `player${message.position}`);
+                // let p = self.addPlayer({
+                //     x: spawnPoint.x,
+                //     y: spawnPoint.y,
+                //     id: message.id,
+                //     team: message.team || 'orange',
+                //     rotation: message.rotation || 0
+                // });
+                console.log('📨 new_player message received (handled by state system)');
             } else if (message.event == "hit") {
-    if (message.punished_id == self.room.sessionId) {
-        // Use the new damage system instead of directly modifying health
-        self.takeDamage(10); // Reduce health by 10 using the proper damage system
-        
-        // Check if player died from this hit
-        if (self.currentHealth <= 0) {
-            // Optional: Implement spectator mode instead of immediate disconnection
-            self.handleDeath();
-        }
-    }
-
-                 if (self.currentHealth <= 0) {
-        self.closingMessage = "You have been killed.\nTo restart, reload the page";
-        this.player.sprite.destroy();
-        delete this.player;
-        alert(self.closingMessage);
-        client.close();
-    }
+                if (message.punished_id == self.room.sessionId) {
+                    // Get damage amount from server (or use default)
+                    let damage = message.damage || 10;
+                    
+                    // Log different messages for self-damage vs other damage
+                    if (message.selfDamage) {
+                        console.log(`💥 You damaged yourself with your own ${message.weaponType || 'weapon'} for ${damage} damage!`);
+                    } else {
+                        console.log(`💥 You took ${damage} damage from ${message.weaponType || 'weapon'}!`);
+                    }
+                    
+                    // Use the new damage system with proper damage amount
+                    self.takeDamage(damage);
+                    
+                    // Check if player died from this hit
+                    if (self.currentHealth <= 0) {
+                        // Let handleDeath() manage the death process properly
+                        self.handleDeath();
+                    }
+                    
+                    // Show appropriate hit message
+                    let weaponType = message.weaponType || 'bullet';
+                    console.log(`💥 Hit by ${weaponType}! Damage: ${damage}, Health: ${self.currentHealth}`);
+                }
+            } else if (message.event == "player_sprite_changed") {
+                // Sprite changes are now handled by state system
+                console.log(`📨 Sprite change message (handled by state system): ${message.sprite}`);
             } else {
                 console.log(`${message.event} is an unkown event`);
             }
         });
 
         this.room.onError.add(() => {
-            alert(room.sessionId + " couldn't join " + room.name);
+            console.error("❌ Connection error: Couldn't join room");
         });
 
     }
 
     update() {
+        // Mouse wheel scroll accumulator decay - reset if no scrolling for a while
+        if (this.scrollAccumulator !== 0) {
+            const timeSinceLastSwitch = this.time.now - this.lastWeaponSwitchTime;
+            if (timeSinceLastSwitch > 500) { // Reset after 500ms of no switching
+                this.scrollAccumulator = 0;
+            }
+        }
+        
         // Performance monitoring
         this.updatePerformanceStats();
 
@@ -793,6 +1172,16 @@ export default class Game extends Phaser.Scene {
             if (Phaser.Input.Keyboard.JustDown(this.testDamageKey)) {
                 this.takeDamage(20); // Deal 20 damage for testing
                 console.log(`Health after H key press: ${this.currentHealth}`);
+                
+                // Also test enemy health bars
+                for (let id in this.players) {
+                    if (this.players[id].healthBar) {
+                        const currentHealth = this.players[id].healthBar.currentHealth;
+                        const newHealth = Math.max(0, currentHealth - 15);
+                        this.updateEnemyHealthBar(id, newHealth);
+                        console.log(`🧪 Testing enemy ${id} health: ${currentHealth} → ${newHealth}`);
+                    }
+                }
             }
         }
 
@@ -813,6 +1202,9 @@ export default class Game extends Phaser.Scene {
                     p.rotation += angleDiff * this.PERFORMANCE_CONFIG.INTERPOLATION_RATE;
                 }
             }
+            
+            // Update enemy health bar position to follow the player
+            this.updateEnemyHealthBarPosition(id);
         }
 
         if (this.player) {
@@ -980,14 +1372,266 @@ takeDamage(amount) {
 }
 
 handleDeath() {
-    this.closingMessage = "You have been killed.\nTo restart, reload the page";
+    GameLogger.info("Player death - showing restart UI");
+    
+    // Notify server that this player has died
+    if (this.roomJoined && this.room) {
+        this.room.send({
+            action: "player_died",
+            data: {
+                playerId: this.room.sessionId
+            }
+        });
+    }
+    
     if (this.player && this.player.sprite) {
         this.player.sprite.destroy();
     }
     delete this.player;
     this.stopLowHealthEffects();
-    alert(this.closingMessage);
-    client.close();
+    
+    // Add a small delay before showing restart UI
+    setTimeout(() => {
+        this.showRestartUI();
+    }, 1000); // 1 second delay to allow other players to see the death
+}
+
+showRestartUI() {
+    GameLogger.debug("Showing restart UI");
+    
+    // Check if restart UI already exists
+    
+    // Remove existing overlay if it exists
+    const existingOverlay = document.getElementById('restartOverlay');
+    if (existingOverlay) {
+        GameLogger.warn("Removing existing restart overlay");
+        existingOverlay.remove();
+    }
+    
+    // Create HTML overlay with the same styling as login/team selection
+    const restartOverlay = document.createElement('div');
+    restartOverlay.id = 'restartOverlay';
+    restartOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        font-family: 'Press Start 2P', monospace;
+    `;
+    
+    // Create the restart form using your exact CSS specifications
+    const restartForm = document.createElement('div');
+    restartForm.style.cssText = `
+        background-color: rgb(26, 26, 26);
+        padding: 50px;
+        border: 2px solid rgb(153, 187, 153);
+        border-radius: 20px;
+        width: 500px;
+        height: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 50px;
+        font-family: "Press Start 2P", monospace;
+    `;
+    
+    // Create death message
+    const deathTitle = document.createElement('h2');
+    deathTitle.textContent = 'GAME OVER';
+    deathTitle.style.cssText = `
+        color: #ff0000;
+        font-size: 32px;
+        text-align: center;
+        margin: 0;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        animation: pulse 2s infinite;
+    `;
+    
+    // Create subtitle
+    const subtitle = document.createElement('p');
+    subtitle.textContent = 'You have been eliminated';
+    subtitle.style.cssText = `
+        color: #cceedd;
+        font-size: 16px;
+        text-align: center;
+        margin: 0;
+    `;
+    
+    // Create restart button using enhanced styling for the larger container
+    const restartButton = document.createElement('button');
+    restartButton.textContent = 'RESTART GAME';
+    restartButton.style.cssText = `
+        padding: 18px 36px;
+        background-color: rgb(153, 187, 153);
+        color: #0f0f0f;
+        border: none;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        text-transform: uppercase;
+        border-radius: 20px;
+        transition: background 0.2s ease;
+        font-family: inherit;
+        width: 70%;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    `;
+    
+    // Add hover effects matching login buttons
+    restartButton.addEventListener('mouseenter', () => {
+        restartButton.style.backgroundColor = '#cceedd';
+    });
+    restartButton.addEventListener('mouseleave', () => {
+        restartButton.style.backgroundColor = '#99bb99';
+    });
+    
+    // Add click handler with proper context binding
+    const self = this; // Store reference to game instance
+    restartButton.addEventListener('click', () => {
+        GameLogger.info("Restart button clicked");
+        self.restartGame();
+    });
+    
+    console.log("✅ Restart button click handler added successfully");
+    console.log("🔍 Button element:", restartButton);
+    console.log("🔍 Game instance reference:", self);
+    
+    // Create keyboard instruction
+    const instruction = document.createElement('p');
+    instruction.textContent = 'Press R key to restart quickly';
+    instruction.style.cssText = `
+        color: #cceedd;
+        font-size: 12px;
+        text-align: center;
+        margin: 0;
+        opacity: 0.8;
+    `;
+    
+    // Add CSS animation for pulse effect
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Assemble the form
+    restartForm.appendChild(deathTitle);
+    restartForm.appendChild(subtitle);
+    restartForm.appendChild(restartButton);
+    restartForm.appendChild(instruction);
+    
+    restartOverlay.appendChild(restartForm);
+    document.body.appendChild(restartOverlay);
+    
+    // Add keyboard shortcut (R key to restart) with proper context binding
+    const keyHandler = (event) => {
+        if (event.key.toLowerCase() === 'r') {
+            console.log("🔄 R key pressed for restart!");
+            self.restartGame();
+        }
+    };
+    document.addEventListener('keydown', keyHandler);
+    
+    // Store references for cleanup
+    this.restartOverlay = restartOverlay;
+    this.keyHandler = keyHandler;
+    
+    console.log("✅ Restart UI fully created and added to page");
+    console.log("🔍 Final overlay element:", this.restartOverlay);
+    console.log("🔍 Button should be clickable now");
+}
+
+restartGame() {
+    console.log("🔄 Restarting game - going to team selection...");
+    console.log("🔍 Current overlay element:", this.restartOverlay);
+    console.log("🔍 Current room:", this.room);
+    console.log("🔍 Current game instance:", this.game);
+    
+    // Clean up HTML overlay
+    if (this.restartOverlay) {
+        console.log("✅ Removing restart overlay");
+        this.restartOverlay.remove();
+        this.restartOverlay = null;
+    } else {
+        console.log("⚠️ No restart overlay to remove");
+    }
+    
+    // Clean up keyboard listener
+    if (this.keyHandler) {
+        console.log("✅ Removing keyboard handler");
+        document.removeEventListener('keydown', this.keyHandler);
+        this.keyHandler = null;
+    } else {
+        console.log("⚠️ No keyboard handler to remove");
+    }
+    
+    // Close current connection
+    if (this.room) {
+        console.log("✅ Closing room connection");
+        this.room.removeAllListeners();
+        this.room.leave();
+    } else {
+        console.log("⚠️ No room connection to close");
+    }
+    
+    // Destroy the current Phaser game
+    if (this.game) {
+        console.log("✅ Destroying Phaser game instance");
+        this.game.destroy(true);
+    } else {
+        console.log("⚠️ No Phaser game instance to destroy");
+    }
+    
+    // Show the main overlay (login/team selection container)
+    console.log("🔍 Looking for overlay element...");
+    const overlay = document.getElementById('overlay');
+    if (overlay) {
+        console.log("✅ Found overlay, making it visible");
+        overlay.style.display = 'flex';
+    } else {
+        console.log("❌ Could not find overlay element with ID 'overlay'");
+    }
+    
+    // Hide login form and show game mode selection directly
+    console.log("🔍 Looking for login and game mode forms...");
+    const loginForm = document.getElementById('loginForm');
+    const gameModeForm = document.getElementById('gameModeForm');
+    const teamSelectionForm = document.getElementById('teamSelectionForm');
+    
+    if (loginForm) {
+        console.log("✅ Found loginForm, hiding it");
+        loginForm.style.display = 'none';
+    } else {
+        console.log("⚠️ Could not find loginForm element");
+    }
+    
+    if (teamSelectionForm) {
+        console.log("✅ Found teamSelectionForm, hiding it");
+        teamSelectionForm.style.display = 'none';
+    }
+    
+    if (gameModeForm) {
+        console.log("✅ Found gameModeForm, showing it");
+        gameModeForm.style.display = 'flex';
+    } else {
+        console.log("❌ Could not find gameModeForm element");
+    }
+    
+    // Reset game config for fresh selection
+    window.gameConfig = window.gameConfig || {};
+    // Don't reset selectedTeam and gameMode so user can keep their previous choice if desired
+    
+    console.log("✅ Restart process completed - should be on game mode selection screen");
 }
 
 animateLowHealthWarning() {
@@ -1017,6 +1661,108 @@ stopLowHealthEffects() {
         this.heartbeatSound = null;
     }
 }
+
+    // =============================
+    // 👥 Enemy Health Bar System
+    // =============================
+
+    createEnemyHealthBar(playerId, playerSprite) {
+        console.log(`🏥 CREATING HEALTH BAR for player ${playerId} at:`, playerSprite.x, playerSprite.y);
+        
+        // Create a simple, very visible health bar using graphics
+        const healthBar = this.add.graphics();
+        
+        // Draw background (black rectangle)
+        healthBar.fillStyle(0x000000);
+        healthBar.fillRect(-30, -50, 60, 10);
+        
+        // Draw border (white outline)
+        healthBar.lineStyle(2, 0xffffff);
+        healthBar.strokeRect(-30, -50, 60, 10);
+        
+        // Draw health fill (green rectangle)
+        healthBar.fillStyle(0x00ff00);
+        healthBar.fillRect(-29, -49, 58, 8);
+        
+        // Position the health bar
+        healthBar.x = playerSprite.x;
+        healthBar.y = playerSprite.y;
+        healthBar.setDepth(100);
+        
+        // Store health bar
+        this.players[playerId].healthBar = {
+            graphics: healthBar,
+            maxHealth: 100,
+            currentHealth: 100,
+            width: 58 // Inner width for health fill
+        };
+        
+        console.log(`✅ HEALTH BAR CREATED for player ${playerId}!`);
+    }
+
+    updateEnemyHealthBar(playerId, newHealth) {
+        const player = this.players[playerId];
+        if (!player || !player.healthBar) {
+            console.log(`⚠️ No health bar found for player ${playerId}`);
+            return;
+        }
+        
+        const healthBar = player.healthBar;
+        
+        // Update current health
+        const oldHealth = healthBar.currentHealth;
+        healthBar.currentHealth = Math.max(0, newHealth);
+        
+        console.log(`❤️ Updating health for ${playerId}: ${oldHealth} → ${healthBar.currentHealth}`);
+        
+        // Calculate health percentage
+        const healthPercentage = healthBar.currentHealth / healthBar.maxHealth;
+        
+        // Clear and redraw the health bar
+        healthBar.graphics.clear();
+        
+        // Draw background (black rectangle)
+        healthBar.graphics.fillStyle(0x000000);
+        healthBar.graphics.fillRect(-30, -50, 60, 10);
+        
+        // Draw border (white outline)
+        healthBar.graphics.lineStyle(2, 0xffffff);
+        healthBar.graphics.strokeRect(-30, -50, 60, 10);
+        
+        // Determine health color
+        let healthColor;
+        if (healthPercentage > 0.6) {
+            healthColor = 0x00ff00; // Green
+        } else if (healthPercentage > 0.3) {
+            healthColor = 0xffff00; // Yellow
+        } else {
+            healthColor = 0xff0000; // Red
+        }
+        
+        // Draw health fill based on current health
+        const fillWidth = healthBar.width * healthPercentage;
+        if (fillWidth > 0) {
+            healthBar.graphics.fillStyle(healthColor);
+            healthBar.graphics.fillRect(-29, -49, fillWidth, 8);
+        }
+        
+        console.log(`🎨 Health bar updated for ${playerId} - ${(healthPercentage * 100).toFixed(1)}% health`);
+    }
+
+    updateEnemyHealthBarPosition(playerId) {
+        const player = this.players[playerId];
+        if (!player || !player.healthBar || !player.sprite) return;
+        
+        const sprite = player.sprite;
+        const healthBar = player.healthBar;
+        
+        // Update position to follow the player sprite
+        healthBar.graphics.x = sprite.x;
+        healthBar.graphics.y = sprite.y;
+        
+        // Ensure health bar is visible
+        healthBar.graphics.setVisible(true);
+    }
 
     // =============================
     // 🔫 Gun Bar System Methods
@@ -1081,17 +1827,89 @@ stopLowHealthEffects() {
         });
     }
 
+    // =============================
+    // 🔫 Bullet Configuration System
+    // =============================
+
+    updateBulletConfig(newConfig) {
+        // Merge new config with existing config
+        this.BULLET_CONFIG = { ...this.BULLET_CONFIG, ...newConfig };
+        console.log(`🔫 Updated bullet config:`, this.BULLET_CONFIG);
+        
+        // Apply changes to existing bullets if any
+        for (let index in this.bullets) {
+            if (this.bullets[index] && this.bullets[index].setDisplaySize) {
+                this.applyBulletConfig(this.bullets[index]);
+            }
+        }
+    }
+
+    applyBulletConfig(bulletSprite) {
+        // Set size using displaySize first, then apply scale multiplier
+        bulletSprite.setDisplaySize(this.BULLET_CONFIG.width, this.BULLET_CONFIG.height);
+        if (this.BULLET_CONFIG.scale !== 1.0) {
+            bulletSprite.setScale(bulletSprite.scaleX * this.BULLET_CONFIG.scale, 
+                                 bulletSprite.scaleY * this.BULLET_CONFIG.scale);
+        }
+        
+        bulletSprite
+            .setTint(this.BULLET_CONFIG.tint)
+            .setAlpha(this.BULLET_CONFIG.alpha)
+            .setDepth(this.BULLET_CONFIG.depth);
+    }
+
+    // Bullet preset configurations for different bullet types
+    setBulletPreset(presetName) {
+        const presets = {
+            'small': { width: 6, height: 12, scale: 1.0, tint: 0xffffff },
+            'normal': { width: 8, height: 16, scale: 1.0, tint: 0xffffff },
+            'large': { width: 12, height: 20, scale: 1.0, tint: 0xffffff }
+        };
+        
+        if (presets[presetName]) {
+            this.updateBulletConfig(presets[presetName]);
+            console.log(`🎯 Applied bullet preset: ${presetName}`);
+        } else {
+            console.warn(`❌ Unknown bullet preset: ${presetName}. Available: ${Object.keys(presets).join(', ')}`);
+        }
+    }
+
     addPlayer(data) {
         let id = data.id;
-        // Use the current sprite key for new players, or default to empty_hands
+        let playerTeam = data.team || 'orange';
+        
+        console.log(`🎮 ADDING PLAYER: ${id}, team: ${playerTeam}, isMe: ${id == this.room.sessionId}`);
+        
+        // Use the current sprite key for own player, or default to empty_hands for others
         let baseSpriteKey = (id == this.room.sessionId) ? this.currentSpriteKey : 'empty_hands';
         
-        // Get team-specific sprite key
-        let spriteKey = this.getTeamSpriteKey(baseSpriteKey);
+        // For other players, we need to create a temporary context to get their team sprite
+        let spriteKey;
+        if (id == this.room.sessionId) {
+            // Use our own team sprite system
+            spriteKey = this.getTeamSpriteKey(baseSpriteKey);
+        } else {
+            // For other players, manually determine team-specific sprite
+            if (playerTeam === 'blue') {
+                switch(baseSpriteKey) {
+                    case 'empty_hands': spriteKey = 'blue_empty_hands'; break;
+                    case 'klakin': spriteKey = 'blue_klakin'; break;
+                    case 'shootgun': spriteKey = 'blue_shootgun'; break;
+                    case 'grinad': spriteKey = 'blue_grinad'; break;
+                    case 'no_grinad': spriteKey = 'blue_empty_hands'; break;
+                    default: spriteKey = 'blue_empty_hands';
+                }
+            } else {
+                spriteKey = baseSpriteKey;
+            }
+        }
+        
+        console.log(`🎮 Adding player ${id} with team: ${playerTeam}, sprite: ${spriteKey}`);
         
         let sprite = this.physics.add.sprite(data.x, data.y, spriteKey).setSize(120, 165);
 
         if (id == this.room.sessionId) {
+            console.log(`👤 THIS IS ME - Setting up my player`);
             this.player = {};
             this.player.sprite = sprite;
             this.player.sprite.setCollideWorldBounds(true);
@@ -1108,27 +1926,115 @@ stopLowHealthEffects() {
             this.updateGunBarImage();
 
         } else {
+            console.log(`👥 THIS IS ENEMY - Setting up enemy player`);
             this.players[id] = {};
             this.players[id].sprite = sprite;
             this.players[id].sprite.setTint("0xff0000");
             this.players[id].sprite.setRotation(data.rotation);
+            
+            // Create health bar for enemy player
+            console.log(`🏥 ABOUT TO CREATE HEALTH BAR for enemy ${id}`);
+            this.createEnemyHealthBar(id, sprite);
+            console.log(`🎮 Enemy player ${id} added with health bar`);
         }
     }
 
     removePlayer(id) {
-        this.players[id].sprite.destroy();
-        delete this.players[id];
+        console.log(`🗑️  Attempting to remove player: ${id}`);
+        console.log(`🗑️  Player exists:`, !!this.players[id]);
+        console.log(`🗑️  Sprite exists:`, !!(this.players[id] && this.players[id].sprite));
+        
+        if (this.players[id] && this.players[id].sprite) {
+            this.players[id].sprite.destroy();
+            
+            // Clean up enemy health bar
+            if (this.players[id].healthBar && this.players[id].healthBar.graphics) {
+                this.players[id].healthBar.graphics.destroy();
+            }
+            
+            delete this.players[id];
+            console.log(`✅ Successfully removed player: ${id}`);
+        } else {
+            console.log(`⚠️  Player ${id} was already removed or doesn't exist`);
+        }
     }
 
     rotatePlayer(pointer = this.input.activePointer) {
+        if (!this.player || !this.player.sprite) return;
+        
         let player = this.player.sprite;
-        let angle = Phaser.Math.Angle.Between(player.x, player.y, pointer.x + this.cameras.main.scrollX, pointer.y + this.cameras.main.scrollY)
-        player.setRotation(angle + Math.PI / 2);
+        // Calculate world coordinates considering camera position
+        let worldX = pointer.x + this.cameras.main.scrollX;
+        let worldY = pointer.y + this.cameras.main.scrollY;
+        
+        // Calculate angle from player to cursor
+        let angle = Phaser.Math.Angle.Between(player.x, player.y, worldX, worldY);
+        
+        // Fix for Chrome cursor reversal issue - use negative PI/2 offset
+        player.setRotation(angle - Math.PI / 2);
     }
 
     removeBullet(index) {
         this.bullets[index].destroy();
         delete this.bullets[index];
+    }
+
+    // Create grenade projectile from server state
+    createGrenadeFromServer(grenadeData) {
+        console.log(`🎯 Creating grenade visual for index ${grenadeData.index}`);
+        
+        // Create grenade sprite
+        const grenade = this.add.image(grenadeData.startX, grenadeData.startY, 'the_grinad');
+        grenade.setScale(0.8);
+        grenade.setDepth(15);
+        
+        // Store grenade reference
+        this.grenades[grenadeData.index] = {
+            sprite: grenade,
+            targetX: grenadeData.targetX,
+            targetY: grenadeData.targetY
+        };
+        
+        console.log(`🚀 Grenade ${grenadeData.index} sprite created at (${grenadeData.startX}, ${grenadeData.startY})`);
+        
+        // Calculate flight time
+        const distance = Phaser.Math.Distance.Between(
+            grenadeData.startX, grenadeData.startY,
+            grenadeData.targetX, grenadeData.targetY
+        );
+        const flightTime = Math.min(1000 + (distance / 2), 2000);
+        
+        console.log(`⏱️ Grenade flight time: ${flightTime}ms, distance: ${Math.round(distance)}px`);
+
+        // Animate grenade movement
+        this.tweens.add({
+            targets: grenade,
+            x: grenadeData.targetX,
+            y: grenadeData.targetY,
+            duration: flightTime,
+            ease: "Quad.easeOut",
+            onComplete: () => {
+                console.log(`🎯 Grenade ${grenadeData.index} reached target`);
+            }
+        });
+
+        // Add rotation animation
+        this.tweens.add({
+            targets: grenade,
+            rotation: Math.PI * 4,
+            duration: flightTime,
+            ease: "Linear"
+        });
+
+        // Add arc effect
+        this.tweens.add({
+            targets: grenade,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: flightTime / 2,
+            yoyo: true,
+            ease: "Sine.easeInOut"
+        });
     }
 
     changeSpriteTexture(spriteKey) {
@@ -1143,6 +2049,18 @@ stopLowHealthEffects() {
             // Get team-specific sprite key
             const teamSpriteKey = this.getTeamSpriteKey(spriteKey);
             this.player.sprite.setTexture(teamSpriteKey);
+            
+            // Add visual feedback for weapon switching - brief scale animation
+            if (this.player.sprite.scene) {
+                this.player.sprite.setScale(1.1);
+                this.tweens.add({
+                    targets: this.player.sprite,
+                    scaleX: 1.0,
+                    scaleY: 1.0,
+                    duration: 100,
+                    ease: 'Back.easeOut'
+                });
+            }
             
             const weapon = this.weaponConfig[spriteKey];
             
@@ -1161,12 +2079,12 @@ stopLowHealthEffects() {
             // Update gun bar to reflect current weapon
             this.updateGunBarImage();
             
-            // Optional: Send sprite change to server
-            if (this.roomJoined) {
+            // Send sprite change to server for multiplayer sync
+            if (this.roomJoined && this.room) {
                 this.room.send({
-                    action: "change_sprite",
+                    action: "sprite_change",
                     data: {
-                        spriteKey: spriteKey
+                        sprite: teamSpriteKey
                     }
                 });
             }
@@ -1194,9 +2112,9 @@ fireWeapon(weapon, pointer) {
             bulletAngle += (Math.random() - 0.5) * weapon.spread;
         }
         
-        // Calculate bullet velocity
-        let speed_x = Math.cos(bulletAngle + Math.PI / 2) * (weapon.bulletSpeed / 16);
-        let speed_y = Math.sin(bulletAngle + Math.PI / 2) * (weapon.bulletSpeed / 16);
+        // Calculate bullet velocity with corrected angle
+        let speed_x = Math.cos(bulletAngle - Math.PI / 2) * (weapon.bulletSpeed / 16);
+        let speed_y = Math.sin(bulletAngle - Math.PI / 2) * (weapon.bulletSpeed / 16);
         
         // Send bullet data to server with weapon info
         this.room.send({
@@ -1296,10 +2214,16 @@ throwGrenade(pointer) {
     // Start reload sequence
     this.startGrenadeReload();
 
-    // Create and animate the grenade
-    this.createGrenadeProjectile(targetX, targetY);
+    console.log(`🎯 Sending grenade throw command:`, {
+        startX: this.player.sprite.x,
+        startY: this.player.sprite.y,
+        targetX: targetX,
+        targetY: targetY,
+        distance: Math.round(distance),
+        maxRange: maxRange
+    });
 
-    // Send grenade data to server
+    // Send grenade data to server (server will handle synchronization)
     this.room.send({
         action: "throw_grenade",
         data: {
@@ -1313,60 +2237,11 @@ throwGrenade(pointer) {
     });
 }
 
-// Create and animate the grenade projectile
-createGrenadeProjectile(targetX, targetY) {
-    // Create grenade sprite
-    const grenade = this.add.image(this.player.sprite.x, this.player.sprite.y, 'the_grinad');
-    grenade.setScale(0.8); // Make it smaller
-    grenade.setDepth(15); // Above other objects
-    
-    // Calculate flight time based on distance
-    const distance = Phaser.Math.Distance.Between(
-        this.player.sprite.x, 
-        this.player.sprite.y, 
-        targetX, 
-        targetY
-    );
-    const flightTime = Math.min(1000 + (distance / 2), 2000); // 1-2 seconds flight time
-
-    // Animate grenade movement with arc
-    this.tweens.add({
-        targets: grenade,
-        x: targetX,
-        y: targetY,
-        duration: flightTime,
-        ease: "Quad.easeOut",
-        onComplete: () => {
-            // Explosion effect at target location
-            this.createExplosionEffect(targetX, targetY);
-            grenade.destroy();
-        }
-    });
-
-    // Add rotation animation
-    this.tweens.add({
-        targets: grenade,
-        rotation: Math.PI * 4, // Spin 2 full rotations
-        duration: flightTime,
-        ease: "Linear"
-    });
-
-    // Add arc effect by animating scale to simulate height
-    this.tweens.add({
-        targets: grenade,
-        scaleX: 1.2,
-        scaleY: 1.2,
-        duration: flightTime / 2,
-        yoyo: true,
-        ease: "Sine.easeInOut"
-    });
-}
-
 // Create explosion effect
 createExplosionEffect(x, y) {
     // Create animated explosion sprite
     const explosion = this.add.sprite(x, y, 'explosion1');
-    explosion.setScale(2); // Make it bigger - adjust size as needed
+    explosion.setScale(3); // Increased from 2 to 3 to better represent damage area
     explosion.setDepth(16);
     
     // Play the explosion animation
@@ -1377,8 +2252,33 @@ createExplosionEffect(x, y) {
         explosion.destroy();
     });
     
-    // Optional: Add screen shake for impact (remove if you don't want it)
-    // this.cameras.main.shake(200, 0.01);
+    // Add a temporary damage radius indicator (red circle)
+    const damageRadius = this.add.graphics();
+    damageRadius.lineStyle(3, 0xff0000, 0.6); // Red border
+    damageRadius.fillStyle(0xff0000, 0.1); // Semi-transparent red fill
+    damageRadius.fillCircle(x, y, 120); // Match server explosion radius
+    damageRadius.strokeCircle(x, y, 120);
+    damageRadius.setDepth(15); // Below explosion, above other objects
+    
+    // Fade out the damage radius indicator
+    this.tweens.add({
+        targets: damageRadius,
+        alpha: 0,
+        duration: 800,
+        ease: "Power2.easeOut",
+        onComplete: () => damageRadius.destroy()
+    });
+    
+    // Optional: Add screen shake for impact (scaled based on distance)
+    if (this.player) {
+        const distanceToPlayer = Phaser.Math.Distance.Between(
+            this.player.sprite.x, this.player.sprite.y, x, y
+        );
+        if (distanceToPlayer < 300) {
+            const shakeIntensity = Math.max(0.005, 0.02 * (300 - distanceToPlayer) / 300);
+            this.cameras.main.shake(200, shakeIntensity);
+        }
+    }
 }
 
 // Start reload sequence
